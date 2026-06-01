@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bowon.cpm.common.mapper.SchedulerExecutionLogMapper">
+
+    <insert id="insert" parameterType="com.bowon.cpm.common.domain.SchedulerExecutionLog"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO scheduler_execution_log (scheduler_name, status, execution_message, started_at)
+        VALUES (#{schedulerName}, #{status}, #{executionMessage}, #{startedAt})
+    </insert>
+
+    <update id="updateFinished">
+        UPDATE scheduler_execution_log
+        SET status = #{status},
+            execution_message = #{executionMessage},
+            finished_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <select id="countRunning" resultType="int">
+        SELECT COUNT(*) FROM scheduler_execution_log
+        WHERE scheduler_name = #{schedulerName} AND status = 'RUNNING'
+    </select>
+
+</mapper>
+

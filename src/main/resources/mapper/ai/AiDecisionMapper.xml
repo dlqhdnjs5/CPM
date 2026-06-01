@@ -48,5 +48,66 @@
         WHERE id = #{id}
     </update>
 
+    <select id="findByDecisionStatus" resultType="com.bowon.cpm.ai.domain.AiDecision">
+        SELECT id, stock_code, stock_name, decision, confidence,
+               current_price, target_price, stop_loss_price,
+               expected_return_rate, expected_loss_rate, risk_reward_ratio,
+               recommended_portfolio_weight, expected_holding_days,
+               risk_level, reason, raw_response_id, decision_status, created_at
+        FROM ai_decision
+        WHERE decision_status = #{decisionStatus}
+          AND created_at >= CURDATE()
+        ORDER BY created_at DESC
+    </select>
+
+    <!--
+        주문 실행 스케줄러 전용.
+        - decision_status = #{decisionStatus} (CREATED) + decision = 'BUY'
+        - created_at >= #{since}: 직전 사이클 이내의 "신선한" 판단만 사용
+        - 같은 종목 중복 시 가장 최신 1건만 반환 (자체 조인으로 stock_code별 MAX(created_at) 추출)
+        - 인덱스 활용을 위해 created_at에 함수 래핑 사용 안 함
+    -->
+    <select id="findPendingBuyDecisions" resultType="com.bowon.cpm.ai.domain.AiDecision">
+        SELECT a.id, a.stock_code, a.stock_name, a.decision, a.confidence,
+               a.current_price, a.target_price, a.stop_loss_price,
+               a.expected_return_rate, a.expected_loss_rate, a.risk_reward_ratio,
+               a.recommended_portfolio_weight, a.expected_holding_days,
+               a.risk_level, a.reason, a.raw_response_id, a.decision_status, a.created_at
+        FROM ai_decision a
+        INNER JOIN (
+            SELECT stock_code, MAX(created_at) AS max_created
+            FROM ai_decision
+            WHERE decision_status = #{decisionStatus}
+              AND decision = 'BUY'
+              AND created_at >= #{since}
+            GROUP BY stock_code
+        ) latest
+          ON latest.stock_code = a.stock_code
+         AND latest.max_created = a.created_at
+        WHERE a.decision_status = #{decisionStatus}
+          AND a.decision = 'BUY'
+          AND a.created_at >= #{since}
+        ORDER BY a.created_at DESC
+    </select>
+
+    <update id="expireStaleDecisions">
+        UPDATE ai_decision
+        SET decision_status = 'EXPIRED'
+        WHERE decision_status = 'CREATED'
+          AND created_at &lt; #{before}
+    </update>
+
+    <select id="findTodayDecisions" resultType="com.bowon.cpm.ai.domain.AiDecision">
+        SELECT id, stock_code, stock_name, decision, confidence,
+               current_price, target_price, stop_loss_price,
+               expected_return_rate, expected_loss_rate, risk_reward_ratio,
+               recommended_portfolio_weight, expected_holding_days,
+               risk_level, reason, raw_response_id, decision_status, created_at
+        FROM ai_decision
+        WHERE DATE(created_at) = CURDATE()
+          AND decision IN ('BUY', 'SELL')
+        ORDER BY created_at DESC
+    </select>
+
 </mapper>
 
