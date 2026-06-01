@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 
@@ -148,7 +149,7 @@ public class DartFinancialService {
 
         try {
             OpenAiResponse response = openAiClient.createTextCompletion(
-                    "너는 재무 분석 전문가다. 핵심 지표만 2줄로 요약한다.",
+                    "너는 재무 분석 전문가다. 핵심 지표만 2줄로 요약한다. 참고로 현재 날짜는" + LocalDate.now() + " 다",
                     sb.toString(),
                     openAiProperties.modelSummary()
             );

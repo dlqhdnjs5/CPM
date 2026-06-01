@@ -29,11 +29,13 @@ mybatis:
     log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
 
 logging:
+  # 로그 파일 출력 경로 (logback-spring.xml 에서 사용)
+  # Windows 절대경로: C:\bowon\cpmLog (디렉토리 없으면 Logback이 자동 생성)
+  file:
+    path: ${LOG_PATH:C:/bowon/cpmLog}
   level:
     com.bowon.cpm: DEBUG
     org.mybatis: INFO
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
 
 # 트레이딩 설정
 cpm:

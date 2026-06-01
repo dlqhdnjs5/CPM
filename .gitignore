@@ -5,6 +5,11 @@ HELP.md
 **/application-local.yaml
 *.env
 .env
+
+### 로그 파일 ###
+logs/
+*.log
+*.log.gz
 .gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar

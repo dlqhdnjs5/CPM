@@ -1,39 +1,43 @@
 package com.bowon.cpm.broker.kis;
 
+import com.bowon.cpm.broker.domain.BrokerToken;
 import com.bowon.cpm.broker.kis.dto.KisTokenResponse;
+import com.bowon.cpm.broker.mapper.BrokerTokenMapper;
 import com.bowon.cpm.common.exception.ExternalApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * KIS OAuth2 Access Token 관리
  *
  * ⚠️ KIS는 하루에 발급 가능한 토큰 수에 제한이 있다.
  *    서버 재시작 후에도 기존 토큰을 재사용해야 한다.
- *    → 토큰을 파일(.kis_token)에 저장하여 서버 재시작 후에도 복원한다.
+ *    → 토큰을 DB(broker_token)에 저장하여 서버 재시작/재배포 후에도 복원한다.
+ *
+ * 우선순위:
+ *   1) 메모리 캐시 (가장 빠름)
+ *   2) DB 캐시 (broker_token 테이블, 재시작 후 복원)
+ *   3) KIS API 신규 발급 (마지막)
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class KisAuthClient {
 
+    private static final String BROKER_TYPE = "KIS";
+    private static final String TOKEN_TYPE  = "ACCESS";
+    /** 만료 10분 전부터는 재발급 대상 */
+    private static final long EXPIRE_BUFFER_MINUTES = 10;
+
     private final WebClient kisWebClient;
     private final KisProperties properties;
-
-    /** 토큰 저장 파일 경로 (서버 재시작 후에도 복원용) */
-    private static final Path TOKEN_FILE = Paths.get(System.getProperty("user.home"), ".kis_token");
-    private static final DateTimeFormatter FMT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+    private final BrokerTokenMapper brokerTokenMapper;
 
     /** 메모리 캐시 */
     private volatile String accessToken;
@@ -42,21 +46,21 @@ public class KisAuthClient {
     /**
      * Access Token 반환
      * 1. 메모리 캐시 확인
-     * 2. 파일 캐시 확인 (서버 재시작 후 복원)
+     * 2. DB 캐시 확인 (서버 재시작 후 복원)
      * 3. 둘 다 없거나 만료됐으면 KIS API 호출
      */
     public String getAccessToken() {
-        // 메모리에 유효한 토큰이 있으면 바로 사용
+        // 1. 메모리에 유효한 토큰이 있으면 바로 사용
         if (isTokenValid()) {
             return accessToken;
         }
-        // 파일에서 토큰 복원 시도
-        loadFromFile();
+        // 2. DB에서 토큰 복원 시도
+        loadFromDb();
         if (isTokenValid()) {
-            log.info("[KIS] 파일에서 Access Token 복원 완료. 만료: {}", expiresAt);
+            log.info("[KIS] DB에서 Access Token 복원 완료. 만료: {}", expiresAt);
             return accessToken;
         }
-        // 신규 발급
+        // 3. 신규 발급
         issueAccessToken();
         return accessToken;
     }
@@ -75,7 +79,15 @@ public class KisAuthClient {
      * - token_type          : "Bearer"
      */
     public synchronized void issueAccessToken() {
+        // synchronized 진입 후 한 번 더 확인 — 다른 스레드가 이미 발급했을 수 있음
         if (isTokenValid()) return;
+
+        // DB도 한 번 더 체크 — 다른 인스턴스가 방금 발급했을 수 있음 (KIS 일일 발급 제한 회피)
+        loadFromDb();
+        if (isTokenValid()) {
+            log.info("[KIS] DB에 최신 토큰 존재. 신규 발급 생략. 만료: {}", expiresAt);
+            return;
+        }
 
         log.info("[KIS] Access Token 발급 요청");
 
@@ -95,13 +107,15 @@ public class KisAuthClient {
                 throw new ExternalApiException("KIS", "Access Token 발급 실패: 응답 없음");
             }
 
-            this.accessToken = response.accessToken();
+            LocalDateTime now = LocalDateTime.now();
             // expires_in 없으면 기본 24시간으로 처리
             long expiresInSeconds = response.expiresIn() != null ? response.expiresIn() : 86400L;
-            this.expiresAt = LocalDateTime.now().plusSeconds(expiresInSeconds);
 
-            // 파일에 저장 (서버 재시작 후 재사용)
-            saveToFile();
+            this.accessToken = response.accessToken();
+            this.expiresAt = now.plusSeconds(expiresInSeconds);
+
+            // DB에 upsert 저장 (서버 재시작/재배포 후 재사용)
+            saveToDb(now);
 
             log.info("[KIS] Access Token 발급 완료. 만료: {}", this.expiresAt);
 
@@ -114,39 +128,44 @@ public class KisAuthClient {
 
     private boolean isTokenValid() {
         return accessToken != null && expiresAt != null
-                && LocalDateTime.now().isBefore(expiresAt.minusMinutes(10));
+                && LocalDateTime.now().isBefore(expiresAt.minusMinutes(EXPIRE_BUFFER_MINUTES));
     }
 
-    /** 토큰을 파일에 저장 (token\n만료시각 형식) */
-    private void saveToFile() {
+    /** 토큰을 DB에 upsert */
+    private void saveToDb(LocalDateTime issuedAt) {
         try {
-            String content = accessToken + "\n" + expiresAt.format(FMT);
-            Files.writeString(TOKEN_FILE, content, StandardCharsets.UTF_8);
-            log.debug("[KIS] Access Token 파일 저장: {}", TOKEN_FILE);
-        } catch (IOException e) {
-            log.warn("[KIS] Access Token 파일 저장 실패 (무시): {}", e.getMessage());
+            BrokerToken token = BrokerToken.builder()
+                    .brokerType(BROKER_TYPE)
+                    .tokenType(TOKEN_TYPE)
+                    .accessToken(accessToken)
+                    .issuedAt(issuedAt)
+                    .expiresAt(expiresAt)
+                    .build();
+            brokerTokenMapper.upsert(token);
+            log.debug("[KIS] Access Token DB 저장 완료");
+        } catch (Exception e) {
+            // DB 저장 실패해도 방금 발급한 토큰은 메모리에 있으므로 즉시 사용은 가능
+            log.warn("[KIS] Access Token DB 저장 실패 (무시, 메모리 캐시 사용): {}", e.getMessage());
         }
     }
 
-    /** 파일에서 토큰 복원 */
-    private void loadFromFile() {
+    /** DB에서 토큰 복원 */
+    private void loadFromDb() {
         try {
-            if (!Files.exists(TOKEN_FILE)) return;
-            String content = Files.readString(TOKEN_FILE, StandardCharsets.UTF_8).trim();
-            String[] lines = content.split("\n");
-            if (lines.length < 2) return;
+            Optional<BrokerToken> opt = brokerTokenMapper.findByBrokerAndType(BROKER_TYPE, TOKEN_TYPE);
+            if (opt.isEmpty()) return;
 
-            String savedToken = lines[0].trim();
-            LocalDateTime savedExpiry = LocalDateTime.parse(lines[1].trim(), FMT);
+            BrokerToken saved = opt.get();
+            if (saved.getAccessToken() == null || saved.getExpiresAt() == null) return;
 
-            if (LocalDateTime.now().isBefore(savedExpiry.minusMinutes(10))) {
-                this.accessToken = savedToken;
-                this.expiresAt = savedExpiry;
+            if (LocalDateTime.now().isBefore(saved.getExpiresAt().minusMinutes(EXPIRE_BUFFER_MINUTES))) {
+                this.accessToken = saved.getAccessToken();
+                this.expiresAt = saved.getExpiresAt();
             } else {
-                log.debug("[KIS] 파일의 토큰이 만료됨. 신규 발급 필요.");
+                log.debug("[KIS] DB의 토큰이 만료됨. 신규 발급 필요.");
             }
         } catch (Exception e) {
-            log.warn("[KIS] Access Token 파일 읽기 실패 (무시): {}", e.getMessage());
+            log.warn("[KIS] Access Token DB 조회 실패 (무시): {}", e.getMessage());
         }
     }
 }

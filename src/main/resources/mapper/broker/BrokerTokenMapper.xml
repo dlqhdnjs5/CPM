@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bowon.cpm.broker.mapper.BrokerTokenMapper">
+
+    <select id="findByBrokerAndType" resultType="com.bowon.cpm.broker.domain.BrokerToken">
+        SELECT id, broker_type, token_type, access_token,
+               issued_at, expires_at, created_at, updated_at
+        FROM broker_token
+        WHERE broker_type = #{brokerType}
+          AND token_type = #{tokenType}
+        LIMIT 1
+    </select>
+
+    <!--
+        Upsert: (broker_type, token_type) UK 충돌 시 토큰/만료시각 갱신
+        - 동시 다중 인스턴스에서 토큰 갱신 경합이 발생해도 마지막 발급값으로 일관 유지
+    -->
+    <insert id="upsert" parameterType="com.bowon.cpm.broker.domain.BrokerToken"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO broker_token (
+            broker_type, token_type, access_token, issued_at, expires_at
+        ) VALUES (
+            #{brokerType}, #{tokenType}, #{accessToken}, #{issuedAt}, #{expiresAt}
+        )
+        ON DUPLICATE KEY UPDATE
+            access_token = VALUES(access_token),
+            issued_at    = VALUES(issued_at),
+            expires_at   = VALUES(expires_at)
+    </insert>
+
+</mapper>
+

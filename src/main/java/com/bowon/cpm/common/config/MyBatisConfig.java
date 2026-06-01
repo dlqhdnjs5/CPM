@@ -20,7 +20,8 @@ import org.springframework.context.annotation.Configuration;
         "com.bowon.cpm.risk.mapper",
         "com.bowon.cpm.order.mapper",
         "com.bowon.cpm.portfolio.mapper",
-        "com.bowon.cpm.feedback.mapper"
+        "com.bowon.cpm.feedback.mapper",
+        "com.bowon.cpm.broker.mapper"
 })
 public class MyBatisConfig {
 }
