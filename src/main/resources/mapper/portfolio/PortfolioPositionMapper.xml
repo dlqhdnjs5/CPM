@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.portfolio.mapper.PortfolioPositionMapper">
+
+    <!--
+        보유 종목 UPSERT
+        - UK: account_no + stock_code
+        - 이미 존재하면 UPDATE, 없으면 INSERT
+    -->
+    <insert id="upsert" parameterType="com.bowon.cpm.portfolio.domain.PortfolioPosition">
+        INSERT INTO portfolio_position (
+            account_no,
+            stock_code,
+            stock_name,
+            quantity,
+            available_quantity,
+            average_buy_price,
+            current_price,
+            purchase_amount,
+            valuation_amount,
+            profit_loss_amount,
+            profit_loss_rate,
+            updated_at
+        ) VALUES (
+            #{accountNo},
+            #{stockCode},
+            #{stockName},
+            #{quantity},
+            #{availableQuantity},
+            #{averageBuyPrice},
+            #{currentPrice},
+            #{purchaseAmount},
+            #{valuationAmount},
+            #{profitLossAmount},
+            #{profitLossRate},
+            NOW()
+        )
+        ON DUPLICATE KEY UPDATE
+            stock_name          = VALUES(stock_name),
+            quantity            = VALUES(quantity),
+            available_quantity  = VALUES(available_quantity),
+            average_buy_price   = VALUES(average_buy_price),
+            current_price       = VALUES(current_price),
+            purchase_amount     = VALUES(purchase_amount),
+            valuation_amount    = VALUES(valuation_amount),
+            profit_loss_amount  = VALUES(profit_loss_amount),
+            profit_loss_rate    = VALUES(profit_loss_rate),
+            updated_at          = NOW()
+    </insert>
+
+    <select id="findByAccountNo" parameterType="string"
+            resultType="com.bowon.cpm.portfolio.domain.PortfolioPosition">
+        SELECT
+            id,
+            account_no,
+            stock_code,
+            stock_name,
+            quantity,
+            available_quantity,
+            average_buy_price,
+            current_price,
+            purchase_amount,
+            valuation_amount,
+            profit_loss_amount,
+            profit_loss_rate,
+            updated_at
+        FROM portfolio_position
+        WHERE account_no = #{accountNo}
+        ORDER BY valuation_amount DESC
+    </select>
+
+    <select id="findByAccountNoAndStockCode"
+            resultType="com.bowon.cpm.portfolio.domain.PortfolioPosition">
+        SELECT id, account_no, stock_code, stock_name,
+               quantity, available_quantity, average_buy_price,
+               current_price, purchase_amount, valuation_amount,
+               profit_loss_amount, profit_loss_rate, updated_at
+        FROM portfolio_position
+        WHERE account_no = #{accountNo}
+          AND stock_code = #{stockCode}
+        LIMIT 1
+    </select>
+
+</mapper>
+

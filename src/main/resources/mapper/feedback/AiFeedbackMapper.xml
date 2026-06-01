@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.feedback.mapper.AiFeedbackMapper">
+
+    <!-- INSERT IGNORE — UK: ai_decision_id + evaluation_type -->
+    <insert id="insertIgnore" parameterType="com.bowon.cpm.feedback.domain.AiFeedback"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT IGNORE INTO ai_feedback (
+            ai_decision_id, stock_code, evaluation_type,
+            base_price, evaluated_price, highest_price, lowest_price,
+            return_rate, market_return_rate, excess_return_rate,
+            target_reached, stop_loss_reached, success,
+            feedback_summary, evaluated_at
+        ) VALUES (
+            #{aiDecisionId}, #{stockCode}, #{evaluationType},
+            #{basePrice}, #{evaluatedPrice}, #{highestPrice}, #{lowestPrice},
+            #{returnRate}, #{marketReturnRate}, #{excessReturnRate},
+            #{targetReached}, #{stopLossReached}, #{success},
+            #{feedbackSummary}, NOW()
+        )
+    </insert>
+
+    <!-- AI 판단 ID로 피드백 목록 조회 -->
+    <select id="findByAiDecisionId" parameterType="long"
+            resultType="com.bowon.cpm.feedback.domain.AiFeedback">
+        SELECT
+            id, ai_decision_id, stock_code, evaluation_type,
+            base_price, evaluated_price, highest_price, lowest_price,
+            return_rate, market_return_rate, excess_return_rate,
+            target_reached, stop_loss_reached, success,
+            feedback_summary, evaluated_at
+        FROM ai_feedback
+        WHERE ai_decision_id = #{aiDecisionId}
+        ORDER BY evaluated_at DESC
+    </select>
+
+    <!-- 종목코드 기준 최근 N건 조회 — 인덱스: idx_ai_feedback_stock_eval -->
+    <select id="findRecentByStockCode"
+            resultType="com.bowon.cpm.feedback.domain.AiFeedback">
+        SELECT
+            id, ai_decision_id, stock_code, evaluation_type,
+            base_price, evaluated_price, highest_price, lowest_price,
+            return_rate, market_return_rate, excess_return_rate,
+            target_reached, stop_loss_reached, success,
+            feedback_summary, evaluated_at
+        FROM ai_feedback
+        WHERE stock_code = #{stockCode}
+        ORDER BY evaluated_at DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 단건 조회 -->
+    <select id="findByDecisionIdAndType"
+            resultType="com.bowon.cpm.feedback.domain.AiFeedback">
+        SELECT
+            id, ai_decision_id, stock_code, evaluation_type,
+            base_price, evaluated_price, highest_price, lowest_price,
+            return_rate, market_return_rate, excess_return_rate,
+            target_reached, stop_loss_reached, success,
+            feedback_summary, evaluated_at
+        FROM ai_feedback
+        WHERE ai_decision_id = #{aiDecisionId}
+          AND evaluation_type = #{evaluationType}
+        LIMIT 1
+    </select>
+
+</mapper>
+

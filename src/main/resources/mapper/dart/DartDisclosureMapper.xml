@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.dart.mapper.DartDisclosureMapper">
+
+    <!-- INSERT IGNORE — UK: receipt_no -->
+    <insert id="insertIgnore" parameterType="com.bowon.cpm.dart.domain.DartDisclosure">
+        INSERT IGNORE INTO dart_disclosure (
+            corp_code, stock_code, corp_name,
+            receipt_no, report_name, disclosure_date,
+            submitter, disclosure_url, is_important
+        ) VALUES (
+            #{corpCode}, #{stockCode}, #{corpName},
+            #{receiptNo}, #{reportName}, #{disclosureDate},
+            #{submitter}, #{disclosureUrl}, #{isImportant}
+        )
+    </insert>
+
+    <!-- 인덱스: idx_dart_disclosure_stock_date (stock_code, disclosure_date) -->
+    <select id="findByStockCodeAndDateRange"
+            resultType="com.bowon.cpm.dart.domain.DartDisclosure">
+        SELECT
+            id, corp_code, stock_code, corp_name,
+            receipt_no, report_name, disclosure_date,
+            submitter, disclosure_url, is_important
+        FROM dart_disclosure
+        WHERE stock_code = #{stockCode}
+          AND disclosure_date BETWEEN #{fromDate} AND #{toDate}
+        ORDER BY disclosure_date DESC
+    </select>
+
+</mapper>
+

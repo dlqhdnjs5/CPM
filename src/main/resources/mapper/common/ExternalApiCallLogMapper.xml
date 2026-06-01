@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.common.mapper.ExternalApiCallLogMapper">
+
+    <insert id="insert" parameterType="com.bowon.cpm.common.domain.ExternalApiCallLog"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO external_api_call_log (
+            provider,
+            api_name,
+            http_method,
+            request_url,
+            request_body,
+            response_status,
+            response_body,
+            success,
+            error_message,
+            elapsed_ms,
+            called_at
+        ) VALUES (
+            #{provider},
+            #{apiName},
+            #{httpMethod},
+            #{requestUrl},
+            #{requestBody},
+            #{responseStatus},
+            #{responseBody},
+            #{success},
+            #{errorMessage},
+            #{elapsedMs},
+            #{calledAt}
+        )
+    </insert>
+
+</mapper>
+

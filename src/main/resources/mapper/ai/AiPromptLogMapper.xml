@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bowon.cpm.ai.mapper.AiPromptLogMapper">
+    <insert id="insert" parameterType="com.bowon.cpm.ai.domain.AiPromptLog"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ai_prompt_log (stock_code, prompt_type, model_name, system_prompt, user_prompt, created_at)
+        VALUES (#{stockCode}, #{promptType}, #{modelName}, #{systemPrompt}, #{userPrompt}, NOW())
+    </insert>
+</mapper>
+

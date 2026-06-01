@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bowon.cpm.order.mapper.OrderRequestMapper">
+
+    <insert id="insert" parameterType="com.bowon.cpm.order.domain.OrderRequest"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO order_request (
+            ai_decision_id, account_no, broker_type, stock_code,
+            order_side, order_type, order_price, order_quantity, order_amount,
+            order_status, idempotency_key, request_reason, broker_order_no, requested_at
+        ) VALUES (
+            #{aiDecisionId}, #{accountNo}, #{brokerType}, #{stockCode},
+            #{orderSide}, #{orderType}, #{orderPrice}, #{orderQuantity}, #{orderAmount},
+            #{orderStatus}, #{idempotencyKey}, #{requestReason}, #{brokerOrderNo}, NOW()
+        )
+    </insert>
+
+    <select id="findByIdempotencyKey" parameterType="string"
+            resultType="com.bowon.cpm.order.domain.OrderRequest">
+        SELECT id, ai_decision_id, account_no, broker_type, stock_code,
+               order_side, order_type, order_price, order_quantity, order_amount,
+               order_status, idempotency_key, request_reason, broker_order_no,
+               requested_at, updated_at
+        FROM order_request
+        WHERE idempotency_key = #{idempotencyKey}
+        LIMIT 1
+    </select>
+
+    <update id="updateBrokerOrderNo">
+        UPDATE order_request
+        SET broker_order_no = #{brokerOrderNo},
+            order_status    = #{orderStatus},
+            updated_at      = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE order_request
+        SET order_status = #{orderStatus},
+            updated_at   = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 인덱스: idx_order_request_stock_requested -->
+    <select id="findByAccountNo"
+            resultType="com.bowon.cpm.order.domain.OrderRequest">
+        SELECT id, ai_decision_id, account_no, broker_type, stock_code,
+               order_side, order_type, order_price, order_quantity, order_amount,
+               order_status, idempotency_key, request_reason, broker_order_no,
+               requested_at, updated_at
+        FROM order_request
+        WHERE account_no = #{accountNo}
+        ORDER BY requested_at DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 인덱스: idx_order_request_broker_order_no -->
+    <select id="findByBrokerOrderNo" parameterType="string"
+            resultType="com.bowon.cpm.order.domain.OrderRequest">
+        SELECT id, ai_decision_id, account_no, broker_type, stock_code,
+               order_side, order_type, order_price, order_quantity, order_amount,
+               order_status, idempotency_key, request_reason, broker_order_no,
+               requested_at, updated_at
+        FROM order_request
+        WHERE broker_order_no = #{brokerOrderNo}
+        LIMIT 1
+    </select>
+
+</mapper>
+

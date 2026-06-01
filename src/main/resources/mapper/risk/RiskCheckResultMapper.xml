@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bowon.cpm.risk.mapper.RiskCheckResultMapper">
+
+    <insert id="insert" parameterType="com.bowon.cpm.risk.domain.RiskCheckResult"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO risk_check_result (
+            ai_decision_id, policy_code, account_no, stock_code,
+            passed, fail_reason,
+            available_cash, expected_order_amount, max_position_amount, current_position_amount,
+            confidence, risk_reward_ratio, checked_at
+        ) VALUES (
+            #{aiDecisionId}, #{policyCode}, #{accountNo}, #{stockCode},
+            #{passed}, #{failReason},
+            #{availableCash}, #{expectedOrderAmount}, #{maxPositionAmount}, #{currentPositionAmount},
+            #{confidence}, #{riskRewardRatio}, NOW()
+        )
+    </insert>
+
+</mapper>
+

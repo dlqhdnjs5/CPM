@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.market.mapper.StockRealtimeQuoteMapper">
+
+    <insert id="insert" parameterType="com.bowon.cpm.market.domain.StockRealtimeQuote"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO stock_realtime_quote (
+            stock_code,
+            quote_time,
+            current_price,
+            change_price,
+            change_rate,
+            volume,
+            accumulated_volume,
+            trading_value
+        ) VALUES (
+            #{stockCode},
+            #{quoteTime},
+            #{currentPrice},
+            #{changePrice},
+            #{changeRate},
+            #{volume},
+            #{accumulatedVolume},
+            #{tradingValue}
+        )
+    </insert>
+
+</mapper>
+

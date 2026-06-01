@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.news.mapper.StockNewsMapper">
+
+    <!-- INSERT IGNORE — UK: origin_url_hash (SHA-256) -->
+    <insert id="insertIgnore" parameterType="com.bowon.cpm.news.domain.StockNews">
+        INSERT IGNORE INTO stock_news (
+            stock_code, keyword, title, summary,
+            origin_url, origin_url_hash,
+            naver_link, publisher, published_at, collected_at
+        ) VALUES (
+            #{stockCode}, #{keyword}, #{title}, #{summary},
+            #{originUrl}, #{originUrlHash},
+            #{naverLink}, #{publisher}, #{publishedAt}, #{collectedAt}
+        )
+    </insert>
+
+    <!-- 인덱스: idx_stock_news_stock_published (stock_code, published_at) -->
+    <select id="findByStockCode"
+            resultType="com.bowon.cpm.news.domain.StockNews">
+        SELECT
+            id, stock_code, keyword, title, summary,
+            origin_url, origin_url_hash,
+            naver_link, publisher, published_at, collected_at
+        FROM stock_news
+        WHERE stock_code = #{stockCode}
+        ORDER BY published_at DESC, collected_at DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>
+

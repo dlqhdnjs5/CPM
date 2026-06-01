@@ -1,0 +1,21 @@
+package com.bowon.cpm.broker.dto;
+
+import lombok.Builder;
+import lombok.Getter;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+@Getter
+@Builder
+public class StockQuoteResult {
+    private String stockCode;
+    private BigDecimal currentPrice;
+    private BigDecimal changePrice;
+    private BigDecimal changeRate;
+    private Long volume;
+    private Long accumulatedVolume;
+    private BigDecimal tradingValue;
+    private LocalDateTime quoteTime;
+}
+

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bowon.cpm.ai.mapper.AiDecisionFactorMapper">
+    <insert id="insertBatch" parameterType="java.util.List">
+        INSERT INTO ai_decision_factor (ai_decision_id, factor_type, factor_direction, factor_score, factor_summary, created_at)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+        (#{item.aiDecisionId}, #{item.factorType}, #{item.factorDirection}, #{item.factorScore}, #{item.factorSummary}, NOW())
+        </foreach>
+    </insert>
+</mapper>
+

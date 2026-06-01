@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bowon.cpm.ai.mapper.AiDecisionRawResponseMapper">
+    <insert id="insert" parameterType="com.bowon.cpm.ai.domain.AiDecisionRawResponse"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO ai_decision_raw_response (
+            prompt_log_id, stock_code, model_name, response_text,
+            prompt_tokens, completion_tokens, total_tokens,
+            is_parsed, parse_error, created_at
+        ) VALUES (
+            #{promptLogId}, #{stockCode}, #{modelName}, #{responseText},
+            #{promptTokens}, #{completionTokens}, #{totalTokens},
+            #{isParsed}, #{parseError}, NOW()
+        )
+    </insert>
+</mapper>
+

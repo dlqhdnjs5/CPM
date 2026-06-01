@@ -1,0 +1,79 @@
+spring:
+  application:
+    name: cpm
+
+  # 로컬 개발 시 application-local.yml 자동 로드
+  # IntelliJ Run Configuration VM options: -Dspring.profiles.active=local
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/cpm?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: ${DB_USERNAME:givememoney}
+    password: ${DB_PASSWORD:givememoney1234}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      pool-name: CpmHikariPool
+
+mybatis:
+  mapper-locations: classpath:mapper/**/*.xml
+  type-aliases-package: com.bowon.cpm
+  configuration:
+    map-underscore-to-camel-case: true
+    default-fetch-size: 100
+    default-statement-timeout: 30
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+logging:
+  level:
+    com.bowon.cpm: DEBUG
+    org.mybatis: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# 트레이딩 설정
+cpm:
+  trading:
+    mode: ${TRADING_MODE:REAL}
+    enabled: ${TRADING_ENABLED:true}
+
+# 외부 API 설정
+external:
+  kis:
+    base-url: ${KIS_BASE_URL:https://openapi.koreainvestment.com:9443}
+    mock-mode: ${KIS_MOCK_MODE:false}
+    # TODO: WebSocket 실시간 시세 수신 시 활성화
+    # websocket-url: ${KIS_WEBSOCKET_URL:찾아서 넣으세요}
+    app-key: ${KIS_APP_KEY:찾아서 넣으세요}
+    app-secret: ${KIS_APP_SECRET:찾아서 넣으세요}
+    account-no: ${KIS_ACCOUNT_NO:찾아서 넣으세요}
+    account-product-code: ${KIS_ACCOUNT_PRODUCT_CODE:01}
+    token-path: /oauth2/tokenP
+    # TODO: WebSocket 접속키 발급 경로 (미구현)
+    approval-key-path: ${KIS_APPROVAL_KEY_PATH:찾아서 넣으세요}
+
+  dart:
+    base-url: ${DART_BASE_URL:https://opendart.fss.or.kr}
+    api-key: ${DART_API_KEY:찾아서 넣으세요}
+
+  naver:
+    base-url: ${NAVER_BASE_URL:https://openapi.naver.com}
+    client-id: ${NAVER_CLIENT_ID:찾아서 넣으세요}
+    client-secret: ${NAVER_CLIENT_SECRET:찾아서 넣으세요}
+
+  openai:
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+    api-key: ${OPENAI_API_KEY:찾아서 넣으세요}
+    # 용도별 모델 분리
+    # 초기 MVP: 비용 최소화 → 데이터 쌓은 후 단계적으로 상위 모델로 교체
+    model-decision: ${OPENAI_MODEL_DECISION:gpt-4.1-mini}      # 종목 매매 판단 (비용/성능 균형)
+    model-summary: ${OPENAI_MODEL_SUMMARY:gpt-4.1-mini}        # 뉴스/공시 요약
+    model-review: ${OPENAI_MODEL_REVIEW:gpt-4.1}               # 고신뢰 후보 재검토 (confidence≥0.8 BUY)
+
+
+
+

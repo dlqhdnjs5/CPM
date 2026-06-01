@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.dart.mapper.DartCorpCodeMapper">
+
+    <insert id="insertBatch" parameterType="java.util.List">
+        INSERT INTO dart_corp_code (corp_code, stock_code, corp_name, corp_eng_name, modify_date)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+        (#{item.corpCode}, #{item.stockCode}, #{item.corpName}, #{item.corpEngName}, #{item.modifyDate})
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            stock_code    = VALUES(stock_code),
+            corp_name     = VALUES(corp_name),
+            corp_eng_name = VALUES(corp_eng_name),
+            modify_date   = VALUES(modify_date),
+            updated_at    = CURRENT_TIMESTAMP
+    </insert>
+
+    <select id="findByStockCode" parameterType="string"
+            resultType="com.bowon.cpm.dart.domain.DartCorpCode">
+        SELECT corp_code, stock_code, corp_name, corp_eng_name, modify_date
+        FROM dart_corp_code
+        WHERE stock_code = #{stockCode}
+        LIMIT 1
+    </select>
+
+    <select id="findByCorpCode" parameterType="string"
+            resultType="com.bowon.cpm.dart.domain.DartCorpCode">
+        SELECT corp_code, stock_code, corp_name, corp_eng_name, modify_date
+        FROM dart_corp_code
+        WHERE corp_code = #{corpCode}
+        LIMIT 1
+    </select>
+
+</mapper>
+

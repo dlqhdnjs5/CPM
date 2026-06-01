@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bowon.cpm.order.mapper.OrderExecutionMapper">
+
+    <insert id="insert" parameterType="com.bowon.cpm.order.domain.OrderExecution"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO order_execution (
+            order_request_id, broker_order_no, stock_code, order_side,
+            executed_quantity, executed_price, executed_amount,
+            commission, tax, executed_at, created_at
+        ) VALUES (
+            #{orderRequestId}, #{brokerOrderNo}, #{stockCode}, #{orderSide},
+            #{executedQuantity}, #{executedPrice}, #{executedAmount},
+            #{commission}, #{tax}, #{executedAt}, NOW()
+        )
+    </insert>
+
+    <!-- 인덱스: idx_order_execution_broker_order_no -->
+    <select id="findByBrokerOrderNo" parameterType="string"
+            resultType="com.bowon.cpm.order.domain.OrderExecution">
+        SELECT id, order_request_id, broker_order_no, stock_code, order_side,
+               executed_quantity, executed_price, executed_amount,
+               commission, tax, executed_at, created_at
+        FROM order_execution
+        WHERE broker_order_no = #{brokerOrderNo}
+        LIMIT 1
+    </select>
+
+    <!-- 인덱스: idx_order_execution_stock_time -->
+    <select id="findByStockCode"
+            resultType="com.bowon.cpm.order.domain.OrderExecution">
+        SELECT id, order_request_id, broker_order_no, stock_code, order_side,
+               executed_quantity, executed_price, executed_amount,
+               commission, tax, executed_at, created_at
+        FROM order_execution
+        WHERE stock_code = #{stockCode}
+        ORDER BY executed_at DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>
+

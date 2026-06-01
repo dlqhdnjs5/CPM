@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bowon.cpm.order.mapper.OrderStatusHistoryMapper">
+
+    <insert id="insert" parameterType="com.bowon.cpm.order.domain.OrderStatusHistory"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO order_status_history (
+            order_request_id, previous_status, current_status, status_reason, created_at
+        ) VALUES (
+            #{orderRequestId}, #{previousStatus}, #{currentStatus}, #{statusReason}, NOW()
+        )
+    </insert>
+
+</mapper>
+

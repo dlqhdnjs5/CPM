@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.feedback.mapper.PortfolioProfitLossMapper">
+
+    <!-- INSERT IGNORE — UK: account_no + stock_code + base_date + evaluation_type -->
+    <insert id="insertIgnore" parameterType="com.bowon.cpm.feedback.domain.PortfolioProfitLoss"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT IGNORE INTO portfolio_profit_loss (
+            account_no, stock_code, base_date, evaluation_type,
+            start_asset_amount, end_asset_amount,
+            realized_profit_loss, unrealized_profit_loss,
+            return_rate
+        ) VALUES (
+            #{accountNo}, #{stockCode}, #{baseDate}, #{evaluationType},
+            #{startAssetAmount}, #{endAssetAmount},
+            #{realizedProfitLoss}, #{unrealizedProfitLoss},
+            #{returnRate}
+        )
+    </insert>
+
+    <!-- 계좌 + 날짜 + 타입 단건 조회 -->
+    <select id="findByAccountAndDate"
+            resultType="com.bowon.cpm.feedback.domain.PortfolioProfitLoss">
+        SELECT
+            id, account_no, stock_code, base_date, evaluation_type,
+            start_asset_amount, end_asset_amount,
+            realized_profit_loss, unrealized_profit_loss,
+            return_rate, created_at
+        FROM portfolio_profit_loss
+        WHERE account_no = #{accountNo}
+          AND (stock_code IS NULL OR stock_code = #{stockCode})
+          AND base_date = #{baseDate}
+          AND evaluation_type = #{evaluationType}
+        LIMIT 1
+    </select>
+
+    <!-- 최근 N건 조회 — 인덱스: idx_portfolio_pl_base_date -->
+    <select id="findRecentByAccountNo"
+            resultType="com.bowon.cpm.feedback.domain.PortfolioProfitLoss">
+        SELECT
+            id, account_no, stock_code, base_date, evaluation_type,
+            start_asset_amount, end_asset_amount,
+            realized_profit_loss, unrealized_profit_loss,
+            return_rate, created_at
+        FROM portfolio_profit_loss
+        WHERE account_no = #{accountNo}
+        ORDER BY base_date DESC, created_at DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>
+

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.market.mapper.StockPriceDailyMapper">
+
+    <!--
+        일봉 배치 INSERT IGNORE
+        - UK: stock_code + trade_date
+        - 이미 존재하는 날짜는 건너뜀 (중복 무시)
+    -->
+    <insert id="insertBatch" parameterType="java.util.List">
+        INSERT IGNORE INTO stock_price_daily (
+            stock_code,
+            trade_date,
+            open_price,
+            high_price,
+            low_price,
+            close_price,
+            volume,
+            trading_value,
+            source
+        ) VALUES
+        <foreach collection="list" item="item" separator=",">
+        (
+            #{item.stockCode},
+            #{item.tradeDate},
+            #{item.openPrice},
+            #{item.highPrice},
+            #{item.lowPrice},
+            #{item.closePrice},
+            #{item.volume},
+            #{item.tradingValue},
+            #{item.source}
+        )
+        </foreach>
+    </insert>
+
+    <!--
+        기간별 일봉 조회
+        인덱스: uk_stock_price_daily_stock_date (stock_code, trade_date)
+    -->
+    <select id="findByStockCodeAndDateRange"
+            resultType="com.bowon.cpm.market.domain.StockPriceDaily">
+        SELECT
+            id,
+            stock_code,
+            trade_date,
+            open_price,
+            high_price,
+            low_price,
+            close_price,
+            volume,
+            trading_value,
+            source
+        FROM stock_price_daily
+        WHERE stock_code = #{stockCode}
+          AND trade_date BETWEEN #{fromDate} AND #{toDate}
+        ORDER BY trade_date DESC
+    </select>
+
+</mapper>
+
