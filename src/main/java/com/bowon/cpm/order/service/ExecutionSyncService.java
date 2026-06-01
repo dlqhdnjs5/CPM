@@ -80,19 +80,34 @@ public class ExecutionSyncService {
                 String brokerOrderNo = item.orderNo();
                 if (brokerOrderNo == null || brokerOrderNo.isBlank()) continue;
 
+                // 체결수량이 0이면 스킵 (미체결 주문)
+                int execQty = parseIntSafe(item.executedQuantity());
+                if (execQty <= 0) continue;
+
                 // 중복 저장 방지 (이미 저장된 체결이면 스킵)
                 if (orderExecutionMapper.findByBrokerOrderNo(brokerOrderNo).isPresent()) {
                     log.debug("[Execution] 이미 저장된 체결: brokerOrderNo={}", brokerOrderNo);
                     continue;
                 }
 
-                // order_request 조회 (없으면 외부 체결이므로 order_request_id = null)
+                // order_request 조회 (없으면 외부 체결이므로 스킵)
                 Long orderRequestId = orderRequestMapper.findByBrokerOrderNo(brokerOrderNo)
                         .map(OrderRequest::getId)
                         .orElse(null);
 
+                if (orderRequestId == null) {
+                    log.warn("[Execution] order_request 매칭 안됨 (외부 체결 스킵): brokerOrderNo={}", brokerOrderNo);
+                    continue;
+                }
+
                 // 체결 시각 파싱: HHmmss → LocalDateTime
                 LocalDateTime executedAt = parseExecutedTime(today, item.executedTime());
+
+                // 체결단가 = 총체결금액 / 총체결수량
+                BigDecimal execAmount = parseBigDecimal(item.executedAmount());
+                BigDecimal execPrice = execQty > 0 && execAmount.compareTo(BigDecimal.ZERO) > 0
+                        ? execAmount.divide(BigDecimal.valueOf(execQty), 0, java.math.RoundingMode.HALF_UP)
+                        : BigDecimal.ZERO;
 
                 // order_execution 저장
                 OrderExecution execution = OrderExecution.builder()
@@ -100,9 +115,9 @@ public class ExecutionSyncService {
                         .brokerOrderNo(brokerOrderNo)
                         .stockCode(item.stockCode())
                         .orderSide(parseSide(item.orderSideName()))
-                        .executedQuantity(parseIntSafe(item.executedQuantity()))
-                        .executedPrice(parseBigDecimal(item.executedPrice()))
-                        .executedAmount(parseBigDecimal(item.executedAmount()))
+                        .executedQuantity(execQty)
+                        .executedPrice(execPrice)
+                        .executedAmount(execAmount)
                         .executedAt(executedAt)
                         .build();
                 orderExecutionMapper.insert(execution);
@@ -117,14 +132,14 @@ public class ExecutionSyncService {
                             .currentStatus("FILLED")
                             .statusReason("체결 확인: brokerOrderNo=" + brokerOrderNo
                                     + ", qty=" + item.executedQuantity()
-                                    + ", price=" + item.executedPrice())
+                                    + ", amount=" + item.executedAmount())
                             .build());
                     newlySavedOrderNos.add(brokerOrderNo);
                 }
 
-                log.info("[Execution] 체결 저장: brokerOrderNo={}, stockCode={}, side={}, qty={}, price={}",
+                log.info("[Execution] 체결 저장: brokerOrderNo={}, stockCode={}, side={}, qty={}, amount={}",
                         brokerOrderNo, item.stockCode(), item.orderSideName(),
-                        item.executedQuantity(), item.executedPrice());
+                        item.executedQuantity(), item.executedAmount());
             }
 
             // 체결이 1건이라도 있으면 포트폴리오 갱신

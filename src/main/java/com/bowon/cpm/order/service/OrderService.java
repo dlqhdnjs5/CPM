@@ -65,6 +65,19 @@ public class OrderService {
             throw new IllegalStateException("HOLD 판단은 주문 실행 불가: aiDecisionId=" + aiDecisionId);
         }
 
+        // HOLD_BY_REVIEW 상태면 주문 차단 (재검토에서 BUY 취소됨)
+        if ("HOLD_BY_REVIEW".equals(decision.getDecisionStatus())) {
+            throw new IllegalStateException("재검토 결과 HOLD → 주문 차단: aiDecisionId=" + aiDecisionId);
+        }
+
+        // 리스크 검증 통과 여부 확인 (passed=true인 최신 건이 있어야 주문 가능)
+        boolean riskPassed = riskCheckResultMapper.findLatestByAiDecisionId(aiDecisionId)
+                .map(RiskCheckResult::getPassed)
+                .orElse(false);
+        if (!riskPassed) {
+            throw new IllegalStateException("리스크 검증 미통과 → 주문 차단: aiDecisionId=" + aiDecisionId);
+        }
+
         // 2. idempotency_key 생성 + 중복 확인
         // {accountNo}:{stockCode}:{aiDecisionId}:{orderSide}:{yyyyMMddHHmm}
         String accountNo = kisProperties.accountNo();

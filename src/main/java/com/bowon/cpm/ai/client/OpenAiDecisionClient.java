@@ -95,6 +95,41 @@ public class OpenAiDecisionClient {
     }
 
     /**
+     * 텍스트 응답 전용 (JSON Schema 없음)
+     * 요약, 분석 등 자유 형식 텍스트 응답이 필요한 경우 사용
+     */
+    public OpenAiResponse createTextCompletion(String systemPrompt, String userPrompt, String model) {
+        log.debug("[OpenAI] 텍스트 요청. model={}", model);
+
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("model", model);
+        request.put("input", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", userPrompt)
+        ));
+        // JSON Schema 없음 — 자유 형식 텍스트 응답
+
+        try {
+            OpenAiResponse response = openAiWebClient.post()
+                    .uri("/v1/responses")
+                    .header("Authorization", "Bearer " + properties.apiKey())
+                    .bodyValue(request)
+                    .retrieve()
+                    .bodyToMono(OpenAiResponse.class)
+                    .block();
+
+            if (response == null) {
+                throw new ExternalApiException("OPENAI", "텍스트 응답 없음");
+            }
+            return response;
+        } catch (ExternalApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ExternalApiException("OPENAI", "텍스트 API 호출 오류: " + e.getMessage());
+        }
+    }
+
+    /**
      * AI 매매 판단 JSON Schema 정의
      * strict:true 이므로 additionalProperties:false 필수
      * required에 모든 필드 포함 필수

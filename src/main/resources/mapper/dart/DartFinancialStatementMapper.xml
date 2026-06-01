@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.dart.mapper.DartFinancialStatementMapper">
+
+    <insert id="insertIgnore" parameterType="com.bowon.cpm.dart.domain.DartFinancialStatement"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT IGNORE INTO dart_financial_statement (
+            corp_code, stock_code, business_year, report_code,
+            statement_type, account_id, account_name, amount, currency, raw_json
+        ) VALUES (
+            #{corpCode}, #{stockCode}, #{businessYear}, #{reportCode},
+            #{statementType}, #{accountId}, #{accountName}, #{amount}, #{currency},
+            #{rawJson}
+        )
+    </insert>
+
+    <!-- 종목코드 기준 최신 재무제표 조회 (연도 내림차순) -->
+    <select id="findByStockCode"
+            resultType="com.bowon.cpm.dart.domain.DartFinancialStatement">
+        SELECT id, corp_code, stock_code, business_year, report_code,
+               statement_type, account_id, account_name, amount, currency, created_at
+        FROM dart_financial_statement
+        WHERE stock_code = #{stockCode}
+        ORDER BY business_year DESC, report_code DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- corp_code + 연도 + 보고서 코드 조회 -->
+    <select id="findByCorpCodeAndYear"
+            resultType="com.bowon.cpm.dart.domain.DartFinancialStatement">
+        SELECT id, corp_code, stock_code, business_year, report_code,
+               statement_type, account_id, account_name, amount, currency, created_at
+        FROM dart_financial_statement
+        WHERE corp_code = #{corpCode}
+          AND business_year = #{businessYear}
+          AND report_code = #{reportCode}
+        ORDER BY account_name
+    </select>
+
+</mapper>
+

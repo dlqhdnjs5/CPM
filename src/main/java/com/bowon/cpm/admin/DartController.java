@@ -2,6 +2,10 @@ package com.bowon.cpm.admin;
 
 import com.bowon.cpm.common.response.ApiResponse;
 import com.bowon.cpm.dart.domain.DartDisclosure;
+import com.bowon.cpm.dart.domain.DartFinancialStatement;
+import com.bowon.cpm.dart.domain.DartMajorEvent;
+import com.bowon.cpm.dart.service.DartFinancialService;
+import com.bowon.cpm.dart.service.DartMajorEventService;
 import com.bowon.cpm.dart.service.DartService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -17,6 +21,8 @@ import java.util.Map;
 public class DartController {
 
     private final DartService dartService;
+    private final DartFinancialService dartFinancialService;
+    private final DartMajorEventService dartMajorEventService;
 
     /**
      * DART corp_code 전체 동기화
@@ -57,6 +63,47 @@ public class DartController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
         return ApiResponse.ok(dartService.getDisclosures(stockCode, from, to));
+    }
+
+    /**
+     * 재무제표 수집
+     * POST /api/dart/{stockCode}/financials/fetch
+     */
+    @PostMapping("/dart/{stockCode}/financials/fetch")
+    public ApiResponse<Map<String, Object>> fetchFinancials(@PathVariable String stockCode) {
+        int count = dartFinancialService.fetchAndSave(stockCode);
+        return ApiResponse.ok("재무제표 수집 완료", Map.of("stockCode", stockCode, "savedCount", count));
+    }
+
+    /**
+     * 저장된 재무제표 조회
+     * GET /api/dart/{stockCode}/financials
+     */
+    @GetMapping("/dart/{stockCode}/financials")
+    public ApiResponse<List<DartFinancialStatement>> getFinancials(@PathVariable String stockCode) {
+        return ApiResponse.ok(dartFinancialService.getStatements(stockCode));
+    }
+
+    /**
+     * 주요 이벤트 분류 + 저장 + OpenAI 요약
+     * POST /api/dart/{stockCode}/events/fetch
+     */
+    @PostMapping("/dart/{stockCode}/events/fetch")
+    public ApiResponse<Map<String, Object>> fetchMajorEvents(@PathVariable String stockCode) {
+        int count = dartMajorEventService.classifyAndSave(stockCode);
+        return ApiResponse.ok("주요 이벤트 수집 완료", Map.of("stockCode", stockCode, "savedCount", count));
+    }
+
+    /**
+     * 저장된 주요 이벤트 조회
+     * GET /api/dart/{stockCode}/events
+     */
+    @GetMapping("/dart/{stockCode}/events")
+    public ApiResponse<List<DartMajorEvent>> getMajorEvents(
+            @PathVariable String stockCode,
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        return ApiResponse.ok(dartMajorEventService.getMajorEvents(stockCode, limit));
     }
 }
 

@@ -18,5 +18,16 @@
         )
     </insert>
 
+    <!-- AI 판단 ID 기준 최신 리스크 검증 결과 -->
+    <select id="findLatestByAiDecisionId" resultType="com.bowon.cpm.risk.domain.RiskCheckResult">
+        SELECT id, ai_decision_id, policy_code, account_no, stock_code,
+               passed, fail_reason, available_cash, expected_order_amount,
+               max_position_amount, current_position_amount, confidence, risk_reward_ratio, checked_at
+        FROM risk_check_result
+        WHERE ai_decision_id = #{aiDecisionId}
+        ORDER BY checked_at DESC
+        LIMIT 1
+    </select>
+
 </mapper>
 

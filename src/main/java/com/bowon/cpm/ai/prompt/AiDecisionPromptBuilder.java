@@ -1,6 +1,7 @@
 package com.bowon.cpm.ai.prompt;
 
 import com.bowon.cpm.dart.domain.DartDisclosure;
+import com.bowon.cpm.dart.domain.DartMajorEvent;
 import com.bowon.cpm.feedback.domain.AiFeedback;
 import com.bowon.cpm.market.domain.StockPriceDaily;
 import com.bowon.cpm.news.domain.StockNews;
@@ -49,6 +50,8 @@ public class AiDecisionPromptBuilder {
      * @param totalAsset      총 평가자산 (원, null 허용)
      * @param availableCash   주문 가능 예수금 (원, null 허용)
      * @param recentFeedbacks 최근 피드백 목록 (null 또는 빈 리스트 허용)
+     * @param financialSummary 재무 요약 텍스트 (null 허용)
+     * @param majorEvents     주요 이벤트 목록 (null 또는 빈 리스트 허용)
      */
     public String buildUserPrompt(
             String stockCode,
@@ -58,7 +61,9 @@ public class AiDecisionPromptBuilder {
             List<DartDisclosure> disclosures,
             BigDecimal totalAsset,
             BigDecimal availableCash,
-            List<AiFeedback> recentFeedbacks
+            List<AiFeedback> recentFeedbacks,
+            String financialSummary,
+            List<DartMajorEvent> majorEvents
     ) {
         StringBuilder sb = new StringBuilder();
         sb.append("아래 데이터를 분석해서 매매 판단 JSON을 생성하라.\n\n");
@@ -125,6 +130,29 @@ public class AiDecisionPromptBuilder {
             disclosures.stream().limit(5).forEach(d ->
                     sb.append("- [").append(d.getDisclosureDate()).append("] ")
                             .append(d.getReportName()).append("\n")
+            );
+        }
+        sb.append("\n");
+
+        // 재무 요약
+        sb.append("## 재무 요약\n");
+        if (financialSummary != null && !financialSummary.isBlank()) {
+            sb.append(financialSummary).append("\n");
+        } else {
+            sb.append("데이터 없음\n");
+        }
+        sb.append("\n");
+
+        // 주요 이벤트 (최대 5건)
+        sb.append("## ⚠️ 주요 이벤트\n");
+        if (majorEvents == null || majorEvents.isEmpty()) {
+            sb.append("최근 6개월 주요 이벤트 없음\n");
+        } else {
+            majorEvents.stream().limit(5).forEach(e ->
+                    sb.append("- [").append(e.getEventDate()).append("] ")
+                            .append(e.getEventType()).append(": ")
+                            .append(e.getSummary() != null ? e.getSummary() : e.getEventTitle())
+                            .append("\n")
             );
         }
         sb.append("\n");

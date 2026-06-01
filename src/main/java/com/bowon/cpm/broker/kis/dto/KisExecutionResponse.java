@@ -17,26 +17,32 @@ public record KisExecutionResponse(
     public boolean isSuccess() { return "0".equals(resultCode); }
 
     public record ExecutionItem(
+            /** 주문일자 (YYYYMMDD) */
+            @JsonProperty("ord_dt")     String orderDate,
             /** 주문번호 — order_request.broker_order_no와 매칭 */
-            @JsonProperty("ODNO")       String orderNo,
+            @JsonProperty("odno")     String orderNo,
+            /** 원주문번호 */
+            @JsonProperty("ord_gno_brno")  String originalOrderNo,
             /** 종목코드 */
-            @JsonProperty("PDNO")       String stockCode,
+            @JsonProperty("pdno")       String stockCode,
             /** 종목명 */
-            @JsonProperty("PRDT_NAME")  String stockName,
-            /** 매도매수구분명 (매수/매도) */
-            @JsonProperty("SLL_BUY_DVSN_CD_NAME") String orderSideName,
+            @JsonProperty("prdt_name")  String stockName,
+            /** 매도매수구분 (01=매도, 02=매수) */
+            @JsonProperty("sll_buy_dvsn_cd") String orderSideCode,
+            /** 매도매수구분명 */
+            @JsonProperty("sll_buy_dvsn_cd_name") String orderSideName,
             /** 주문수량 */
-            @JsonProperty("ORD_QTY")    String orderQuantity,
-            /** 체결수량 */
-            @JsonProperty("CCLD_QTY")   String executedQuantity,
-            /** 체결단가 */
-            @JsonProperty("CCLD_UNPR")  String executedPrice,
-            /** 체결금액 */
-            @JsonProperty("CCLD_AMT")   String executedAmount,
-            /** 주문시각 */
-            @JsonProperty("ORD_TMD")    String orderTime,
-            /** 체결시각 */
-            @JsonProperty("CCLD_TMD")   String executedTime
+            @JsonProperty("ord_qty")    String orderQuantity,
+            /** 주문단가 */
+            @JsonProperty("ord_unpr")   String orderPrice,
+            /** 총체결수량 */
+            @JsonProperty("tot_ccld_qty") String executedQuantity,
+            /** 총체결금액 */
+            @JsonProperty("tot_ccld_amt") String executedAmount,
+            /** 미체결수량 */
+            @JsonProperty("rmn_qty")   String remainQuantity,
+            /** 체결시간 (HHMMSS) */
+            @JsonProperty("infm_tmd")  String executedTime
     ) {}
 }
 

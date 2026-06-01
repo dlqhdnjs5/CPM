@@ -14,7 +14,10 @@ import com.bowon.cpm.feedback.mapper.AiFeedbackMapper;
 import com.bowon.cpm.common.domain.ExternalApiCallLog;
 import com.bowon.cpm.common.mapper.ExternalApiCallLogMapper;
 import com.bowon.cpm.dart.domain.DartDisclosure;
+import com.bowon.cpm.dart.domain.DartMajorEvent;
 import com.bowon.cpm.dart.mapper.DartDisclosureMapper;
+import com.bowon.cpm.dart.mapper.DartMajorEventMapper;
+import com.bowon.cpm.dart.service.DartFinancialService;
 import com.bowon.cpm.market.domain.StockPriceDaily;
 import com.bowon.cpm.market.mapper.StockPriceDailyMapper;
 import com.bowon.cpm.news.domain.StockNews;
@@ -47,6 +50,8 @@ public class AiDecisionService {
     private final StockPriceDailyMapper stockPriceDailyMapper;
     private final StockNewsMapper stockNewsMapper;
     private final DartDisclosureMapper dartDisclosureMapper;
+    private final DartMajorEventMapper dartMajorEventMapper;
+    private final DartFinancialService dartFinancialService;
 
     private final AiPromptLogMapper promptLogMapper;
     private final AiDecisionRawResponseMapper rawResponseMapper;
@@ -120,8 +125,26 @@ public class AiDecisionService {
                 recentFeedbacks = java.util.Collections.emptyList();
             }
 
+            // 3-2. 재무 요약 조회 (OpenAI or fallback 텍스트)
+            String financialSummary = null;
+            try {
+                financialSummary = dartFinancialService.summarize(stockCode);
+            } catch (Exception e) {
+                log.warn("[AI] 재무 요약 조회 실패: {}", e.getMessage());
+            }
+
+            // 3-3. 주요 이벤트 조회 (최대 5건)
+            List<DartMajorEvent> majorEvents;
+            try {
+                majorEvents = dartMajorEventMapper.findByStockCode(stockCode, 5);
+            } catch (Exception e) {
+                log.warn("[AI] 주요 이벤트 조회 실패: {}", e.getMessage());
+                majorEvents = java.util.Collections.emptyList();
+            }
+
             String userPrompt = promptBuilder.buildUserPrompt(
-                    stockCode, stockName, dailyPrices, newsList, disclosures, totalAsset, availableCash, recentFeedbacks);
+                    stockCode, stockName, dailyPrices, newsList, disclosures,
+                    totalAsset, availableCash, recentFeedbacks, financialSummary, majorEvents);
 
             // 4. ai_prompt_log 저장 (API 호출 전에 먼저 저장)
             AiPromptLog promptLog = AiPromptLog.builder()
