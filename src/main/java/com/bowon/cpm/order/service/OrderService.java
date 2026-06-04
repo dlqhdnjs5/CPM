@@ -4,16 +4,21 @@ import com.bowon.cpm.ai.domain.AiDecision;
 import com.bowon.cpm.ai.mapper.AiDecisionMapper;
 import com.bowon.cpm.broker.BrokerClient;
 import com.bowon.cpm.broker.dto.AccountBalanceResult;
+import com.bowon.cpm.broker.dto.StockQuoteResult;
 import com.bowon.cpm.broker.kis.KisProperties;
+import com.bowon.cpm.common.config.TradingProperties;
 import com.bowon.cpm.order.domain.OrderRequest;
-import com.bowon.cpm.order.domain.OrderStatusHistory;
 import com.bowon.cpm.order.executor.OrderExecutor;
 import com.bowon.cpm.order.mapper.OrderRequestMapper;
-import com.bowon.cpm.order.mapper.OrderStatusHistoryMapper;
-import com.bowon.cpm.order.policy.OrderPolicyEngine;
-import com.bowon.cpm.order.policy.OrderPolicyEngine.OrderCalculation;
+import com.bowon.cpm.order.policy.BuyOrderPolicyEngine;
+import com.bowon.cpm.order.policy.SellOrderPolicyEngine;
+import com.bowon.cpm.order.trigger.SellTrigger;
+import com.bowon.cpm.portfolio.domain.PortfolioPosition;
+import com.bowon.cpm.portfolio.mapper.PortfolioPositionMapper;
 import com.bowon.cpm.risk.domain.RiskCheckResult;
 import com.bowon.cpm.risk.mapper.RiskCheckResultMapper;
+import com.bowon.cpm.risk.mapper.RiskPolicyConfigMapper;
+import com.bowon.cpm.risk.rule.SellRiskManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,14 +35,21 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class OrderService {
 
-    private final OrderPolicyEngine orderPolicyEngine;
+    private static final String DEFAULT_POLICY_CODE = "DEFAULT_RISK_POLICY";
+
+    private final BuyOrderPolicyEngine buyOrderPolicyEngine;
+    private final SellOrderPolicyEngine sellOrderPolicyEngine;
+    private final SellRiskManager sellRiskManager;
     private final OrderExecutor orderExecutor;
+    private final OrderRequestCreateService orderRequestCreateService;
     private final OrderRequestMapper orderRequestMapper;
-    private final OrderStatusHistoryMapper orderStatusHistoryMapper;
     private final AiDecisionMapper aiDecisionMapper;
     private final RiskCheckResultMapper riskCheckResultMapper;
+    private final RiskPolicyConfigMapper riskPolicyConfigMapper;
+    private final PortfolioPositionMapper portfolioPositionMapper;
     private final BrokerClient brokerClient;
     private final KisProperties kisProperties;
+    private final TradingProperties tradingProperties;
 
     private static final DateTimeFormatter IDEMPOTENCY_FMT = DateTimeFormatter.ofPattern("yyyyMMddHHmm");
 
@@ -54,36 +66,54 @@ public class OrderService {
      *
      * @param aiDecisionId AI 판단 ID
      */
-    @Transactional
     public OrderRequest placeOrder(Long aiDecisionId) {
+        return placeOrderInternal(aiDecisionId, null, true);
+    }
+
+    /**
+     * 목표가/손절가 트리거 기반 SELL 주문 실행.
+     * AI BUY 판단에 연결된 보유 포지션을 청산/부분청산할 때 사용한다.
+     */
+    public OrderRequest placeSellOrderByTrigger(Long aiDecisionId, SellTrigger trigger) {
+        if (trigger == null || SellTrigger.AI_DECISION.equals(trigger)) {
+            throw new IllegalArgumentException("트리거 기반 매도에는 TARGET/STOP 트리거가 필요함");
+        }
+        return placeOrderInternal(aiDecisionId, trigger, false);
+    }
+
+    private OrderRequest placeOrderInternal(Long aiDecisionId, SellTrigger forcedSellTrigger, boolean requireRiskPassed) {
         // 1. AI 판단 조회
         AiDecision decision = aiDecisionMapper.findById(aiDecisionId)
                 .orElseThrow(() -> new IllegalArgumentException("AI 판단 없음: id=" + aiDecisionId));
 
+        String orderSide = forcedSellTrigger != null ? "SELL" : decision.getDecision();
+
         // HOLD는 주문 없음
-        if ("HOLD".equals(decision.getDecision())) {
+        if ("HOLD".equals(orderSide)) {
             throw new IllegalStateException("HOLD 판단은 주문 실행 불가: aiDecisionId=" + aiDecisionId);
         }
 
         // HOLD_BY_REVIEW 상태면 주문 차단 (재검토에서 BUY 취소됨)
-        if ("HOLD_BY_REVIEW".equals(decision.getDecisionStatus())) {
+        if (forcedSellTrigger == null && "HOLD_BY_REVIEW".equals(decision.getDecisionStatus())) {
             throw new IllegalStateException("재검토 결과 HOLD → 주문 차단: aiDecisionId=" + aiDecisionId);
         }
 
         // 리스크 검증 통과 여부 확인 (passed=true인 최신 건이 있어야 주문 가능)
-        boolean riskPassed = riskCheckResultMapper.findLatestByAiDecisionId(aiDecisionId)
-                .map(RiskCheckResult::getPassed)
-                .orElse(false);
-        if (!riskPassed) {
-            throw new IllegalStateException("리스크 검증 미통과 → 주문 차단: aiDecisionId=" + aiDecisionId);
+        if (requireRiskPassed) {
+            boolean riskPassed = riskCheckResultMapper.findLatestByAiDecisionId(aiDecisionId)
+                    .map(RiskCheckResult::getPassed)
+                    .orElse(false);
+            if (!riskPassed) {
+                throw new IllegalStateException("리스크 검증 미통과 → 주문 차단: aiDecisionId=" + aiDecisionId);
+            }
         }
 
         // 2. idempotency_key 생성 + 중복 확인
-        // {accountNo}:{stockCode}:{aiDecisionId}:{orderSide}:{yyyyMMddHHmm}
         String accountNo = kisProperties.accountNo();
-        String idempotencyKey = String.format("%s:%s:%d:%s:%s",
-                accountNo, decision.getStockCode(), aiDecisionId,
-                decision.getDecision(), LocalDateTime.now().format(IDEMPOTENCY_FMT));
+        SellTrigger sellTrigger = "SELL".equals(orderSide)
+                ? (forcedSellTrigger != null ? forcedSellTrigger : SellTrigger.AI_DECISION)
+                : null;
+        String idempotencyKey = buildIdempotencyKey(accountNo, decision, orderSide, sellTrigger);
 
         Optional<OrderRequest> existing = orderRequestMapper.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
@@ -91,7 +121,6 @@ public class OrderService {
             return existing.get();
         }
 
-        // 3. KIS 실시간 잔고 조회 (주문 직전 최신값)
         BigDecimal availableCash = BigDecimal.ZERO;
         BigDecimal totalAsset = BigDecimal.ZERO;
         try {
@@ -99,42 +128,38 @@ public class OrderService {
             availableCash = balance.getAvailableCash() != null ? balance.getAvailableCash() : BigDecimal.ZERO;
             totalAsset = balance.getTotalAssetAmount() != null ? balance.getTotalAssetAmount() : BigDecimal.ZERO;
         } catch (Exception e) {
-            log.warn("[Order] 잔고 조회 실패 (주문 중단): {}", e.getMessage());
-            throw new IllegalStateException("잔고 조회 실패로 주문 중단: " + e.getMessage());
+            if ("BUY".equals(orderSide)) {
+                log.warn("[Order] 잔고 조회 실패 (주문 중단): {}", e.getMessage());
+                throw new IllegalStateException("잔고 조회 실패로 주문 중단: " + e.getMessage());
+            }
+            log.warn("[Order] SELL 잔고 조회 실패 (totalAsset=0으로 진행): {}", e.getMessage());
         }
 
-        // 4. 주문 수량 계산
-        OrderCalculation calc = orderPolicyEngine.calculate(decision, totalAsset, availableCash);
-        if (!calc.isOrderable()) {
-            throw new IllegalStateException(
-                    "주문 수량 0: stockCode=" + decision.getStockCode() +
-                            ", availableCash=" + availableCash + ", price=" + decision.getCurrentPrice());
+        OrderDraft draft = "BUY".equals(orderSide)
+                ? calculateBuy(decision, totalAsset, availableCash)
+                : calculateSell(decision, accountNo, totalAsset, sellTrigger);
+
+        if (draft.quantity < 1) {
+            throw new IllegalStateException("주문 수량 0: stockCode=" + decision.getStockCode()
+                    + ", side=" + orderSide + ", trigger=" + sellTrigger);
         }
 
-        // 5. order_request 생성 (READY) — 주문 API 호출 전에 반드시 먼저 저장
+        // Save READY before calling the external order API.
         OrderRequest orderRequest = OrderRequest.builder()
                 .aiDecisionId(aiDecisionId)
                 .accountNo(accountNo)
-                .brokerType("KIS")
+                .brokerType(tradingProperties.isPaperMode() ? "PAPER" : "KIS")
                 .stockCode(decision.getStockCode())
-                .orderSide(decision.getDecision())   // BUY or SELL
+                .orderSide(orderSide)
                 .orderType("MARKET")                  // 현재는 시장가 주문
-                .orderPrice(calc.unitPrice())
-                .orderQuantity(calc.quantity())
-                .orderAmount(calc.orderAmount())
+                .orderPrice(draft.unitPrice)
+                .orderQuantity(draft.quantity)
+                .orderAmount(draft.orderAmount)
                 .orderStatus("READY")
                 .idempotencyKey(idempotencyKey)
-                .requestReason("AI 판단 기반 주문: " + decision.getReason())
+                .requestReason(buildRequestReason(decision, orderSide, sellTrigger))
                 .build();
-        orderRequestMapper.insert(orderRequest);
-
-        // READY 이력 저장
-        orderStatusHistoryMapper.insert(OrderStatusHistory.builder()
-                .orderRequestId(orderRequest.getId())
-                .previousStatus(null)
-                .currentStatus("READY")
-                .statusReason("주문 요청 생성")
-                .build());
+        orderRequestCreateService.createReady(orderRequest);
 
         log.info("[Order] 주문 요청 생성: id={}, stockCode={}, side={}, qty={}, amount={}",
                 orderRequest.getId(), orderRequest.getStockCode(),
@@ -146,6 +171,71 @@ public class OrderService {
 
         return orderRequest;
     }
+
+    private OrderDraft calculateBuy(AiDecision decision, BigDecimal totalAsset, BigDecimal availableCash) {
+        BuyOrderPolicyEngine.OrderCalculation calc =
+                buyOrderPolicyEngine.calculate(decision, totalAsset, availableCash);
+        return new OrderDraft(calc.quantity(), calc.orderAmount(), calc.unitPrice());
+    }
+
+    private OrderDraft calculateSell(
+            AiDecision decision,
+            String accountNo,
+            BigDecimal totalAsset,
+            SellTrigger sellTrigger
+    ) {
+        PortfolioPosition position = portfolioPositionMapper
+                .findByAccountNoAndStockCode(accountNo, decision.getStockCode())
+                .orElse(null);
+
+        BigDecimal currentPrice = decision.getCurrentPrice();
+        try {
+            StockQuoteResult quote = brokerClient.getCurrentPrice(decision.getStockCode());
+            if (quote != null && quote.getCurrentPrice() != null) {
+                currentPrice = quote.getCurrentPrice();
+            }
+        } catch (Exception e) {
+            log.warn("[Order] SELL 현재가 조회 실패, AI 판단가 사용: {}", e.getMessage());
+        }
+
+        boolean hasPreviousPartialSell = orderRequestMapper
+                .existsSellByTrigger(decision.getId(), SellTrigger.TARGET_HIT_1.name());
+        SellOrderPolicyEngine.SellCalculation calc = sellOrderPolicyEngine.calculate(
+                decision, position, currentPrice, totalAsset, sellTrigger, hasPreviousPartialSell);
+
+        var policy = riskPolicyConfigMapper.findByPolicyCode(DEFAULT_POLICY_CODE)
+                .orElseThrow(() -> new IllegalStateException("리스크 정책 없음: " + DEFAULT_POLICY_CODE));
+        String failReason = sellRiskManager.check(decision, policy, position, calc.quantity(), sellTrigger);
+        if (failReason != null) {
+            throw new IllegalStateException("SELL 리스크 실패: " + failReason);
+        }
+        return new OrderDraft(calc.quantity(), calc.orderAmount(), calc.unitPrice());
+    }
+
+    private String buildIdempotencyKey(
+            String accountNo,
+            AiDecision decision,
+            String orderSide,
+            SellTrigger sellTrigger
+    ) {
+        String timestamp = LocalDateTime.now().format(IDEMPOTENCY_FMT);
+        if ("SELL".equals(orderSide)) {
+            return String.format("%s:%s:%d:SELL:%s:%s",
+                    accountNo, decision.getStockCode(), decision.getId(), sellTrigger.name(), timestamp);
+        }
+        return String.format("%s:%s:%d:BUY:%s",
+                accountNo, decision.getStockCode(), decision.getId(), timestamp);
+    }
+
+    private String buildRequestReason(AiDecision decision, String orderSide, SellTrigger sellTrigger) {
+        if ("SELL".equals(orderSide)) {
+            return "SELL[" + sellTrigger.name() + "]: " +
+                    (decision.getReason() != null ? decision.getReason() : "");
+        }
+        return "AI 판단 기반 주문: " + decision.getReason();
+    }
+
+    private record OrderDraft(int quantity, BigDecimal orderAmount, BigDecimal unitPrice) {}
 
     /**
      * 주문 목록 조회

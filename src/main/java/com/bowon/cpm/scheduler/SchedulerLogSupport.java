@@ -22,6 +22,8 @@ import java.time.LocalTime;
 @RequiredArgsConstructor
 public class SchedulerLogSupport {
 
+    private static final int STALE_RUNNING_TIMEOUT_MINUTES = 60;
+
     private final SchedulerExecutionLogMapper logMapper;
 
     /** 평일 여부 */
@@ -40,7 +42,17 @@ public class SchedulerLogSupport {
 
     /** 이미 RUNNING 중이면 true (중복 실행 방지) */
     public boolean isAlreadyRunning(String schedulerName) {
+        expireStaleRunning(schedulerName);
         return logMapper.countRunning(schedulerName) > 0;
+    }
+
+    private void expireStaleRunning(String schedulerName) {
+        LocalDateTime timeoutBefore = LocalDateTime.now().minusMinutes(STALE_RUNNING_TIMEOUT_MINUTES);
+        String message = "Stale RUNNING expired after " + STALE_RUNNING_TIMEOUT_MINUTES + " minutes";
+        int expired = logMapper.expireStaleRunning(schedulerName, timeoutBefore, message);
+        if (expired > 0) {
+            log.warn("[Scheduler] stale RUNNING expired: scheduler={}, count={}", schedulerName, expired);
+        }
     }
 
     /** 실행 시작 기록 → ID 반환 */

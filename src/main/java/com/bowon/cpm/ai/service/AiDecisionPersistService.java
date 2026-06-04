@@ -56,6 +56,15 @@ public class AiDecisionPersistService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void updateParsedSuccess(Long rawResponseId) {
+        try {
+            rawResponseMapper.updateParsedSuccess(rawResponseId);
+        } catch (Exception e) {
+            log.warn("[AI] parsed_success 저장 실패: id={}, error={}", rawResponseId, e.getMessage());
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void insertDecision(AiDecision decision) {
         decisionMapper.insert(decision);
     }

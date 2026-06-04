@@ -155,6 +155,7 @@ public class AiDecisionService {
             AiTradeDecisionJson parsed;
             try {
                 parsed = parser.parse(responseText);
+                persistService.updateParsedSuccess(rawResponse.getId());
             } catch (Exception e) {
                 log.error("[AI] 파싱 실패: stockCode={}, error={}", stockCode, e.getMessage());
                 persistService.updateParseError(rawResponse.getId(), e.getMessage());

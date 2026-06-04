@@ -40,8 +40,8 @@ logging:
 # 트레이딩 설정
 cpm:
   trading:
-    mode: ${TRADING_MODE:REAL}
-    enabled: ${TRADING_ENABLED:true}
+    mode: ${TRADING_MODE:PAPER}
+    enabled: ${TRADING_ENABLED:false}
 
 # 외부 API 설정
 external:

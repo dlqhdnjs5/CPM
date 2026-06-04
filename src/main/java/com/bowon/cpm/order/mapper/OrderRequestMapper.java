@@ -15,6 +15,8 @@ public interface OrderRequestMapper {
     /** idempotency_key로 중복 주문 확인 */
     Optional<OrderRequest> findByIdempotencyKey(String idempotencyKey);
 
+    Optional<OrderRequest> findById(Long id);
+
     /** broker_order_no + status 업데이트 */
     void updateBrokerOrderNo(
             @Param("id") Long id,
@@ -35,5 +37,15 @@ public interface OrderRequestMapper {
 
     /** broker_order_no로 주문 조회 (체결 동기화 시 사용) */
     Optional<OrderRequest> findByBrokerOrderNo(String brokerOrderNo);
+
+    boolean existsSellByTrigger(
+            @Param("aiDecisionId") Long aiDecisionId,
+            @Param("trigger") String trigger
+    );
+
+    boolean existsTodaySellByTrigger(
+            @Param("aiDecisionId") Long aiDecisionId,
+            @Param("trigger") String trigger
+    );
 }
 

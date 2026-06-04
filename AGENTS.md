@@ -33,7 +33,7 @@
 2. **OpenDART 데이터** - dart_corp_code, dart_company_overview, dart_disclosure, dart_financial_statement, dart_financial_account, dart_major_event
 3. **뉴스 데이터** - news_keyword, stock_news, news_ai_summary, news_sentiment
 4. **AI 판단 데이터** - ai_prompt_log, ai_decision_raw_response, ai_decision, ai_decision_factor, ai_feedback
-5. **계좌/포트폴리오** - account_balance, portfolio_position, portfolio_snapshot, portfolio_profit_loss
+5. **계좌/포트폴리오** - account_balance, portfolio_position, portfolio_snapshot, portfolio_profit_loss, portfolio_realized_profit_loss
 6. **주문/체결** - order_request, order_execution, order_cancel_request, order_status_history
 7. **리스크/전략** - risk_policy_config, risk_check_result, strategy_config, strategy_execution_log
 8. **운영 로그** - scheduler_execution_log, broker_api_log, external_api_call_log, system_error_log
@@ -602,6 +602,7 @@ account_balance
 portfolio_position
 portfolio_snapshot
 portfolio_profit_loss
+portfolio_realized_profit_loss
 ```
 
 책임:
@@ -612,6 +613,7 @@ portfolio_profit_loss
 - 평가금액 계산
 - 수익률 계산
 - 포트폴리오 스냅샷 생성
+- SELL 체결별 실현손익 저장
 
 ---
 
@@ -624,6 +626,7 @@ AI 판단 결과를 평가한다.
 ```text
 ai_feedback
 portfolio_profit_loss
+portfolio_realized_profit_loss
 ```
 
 책임:
@@ -634,6 +637,7 @@ portfolio_profit_loss
 - 목표가 도달 여부 계산
 - 손절가 도달 여부 계산
 - 판단 성공 여부 계산
+- SELL 체결별 실현손익 기반 성과 분석
 - 다음 AI 판단에 사용할 피드백 요약 생성
 
 ---
@@ -1212,6 +1216,7 @@ account_balance
 portfolio_position
 portfolio_snapshot
 portfolio_profit_loss
+portfolio_realized_profit_loss
 
 order_request
 order_execution

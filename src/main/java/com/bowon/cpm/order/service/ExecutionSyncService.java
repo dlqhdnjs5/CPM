@@ -5,12 +5,15 @@ import com.bowon.cpm.broker.kis.dto.KisExecutionResponse;
 import com.bowon.cpm.broker.kis.dto.KisExecutionResponse.ExecutionItem;
 import com.bowon.cpm.common.domain.BrokerApiLog;
 import com.bowon.cpm.common.mapper.BrokerApiLogMapper;
+import com.bowon.cpm.feedback.service.RealizedProfitLossService;
 import com.bowon.cpm.order.domain.OrderExecution;
 import com.bowon.cpm.order.domain.OrderRequest;
 import com.bowon.cpm.order.domain.OrderStatusHistory;
 import com.bowon.cpm.order.mapper.OrderExecutionMapper;
 import com.bowon.cpm.order.mapper.OrderRequestMapper;
 import com.bowon.cpm.order.mapper.OrderStatusHistoryMapper;
+import com.bowon.cpm.portfolio.domain.PortfolioPosition;
+import com.bowon.cpm.portfolio.mapper.PortfolioPositionMapper;
 import com.bowon.cpm.portfolio.service.PortfolioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +45,9 @@ public class ExecutionSyncService {
     private final OrderExecutionMapper orderExecutionMapper;
     private final OrderRequestMapper orderRequestMapper;
     private final OrderStatusHistoryMapper orderStatusHistoryMapper;
+    private final PortfolioPositionMapper portfolioPositionMapper;
     private final PortfolioService portfolioService;
+    private final RealizedProfitLossService realizedProfitLossService;
     private final BrokerApiLogMapper brokerApiLogMapper;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HHmmss");
@@ -91,9 +96,9 @@ public class ExecutionSyncService {
                 }
 
                 // order_request 조회 (없으면 외부 체결이므로 스킵)
-                Long orderRequestId = orderRequestMapper.findByBrokerOrderNo(brokerOrderNo)
-                        .map(OrderRequest::getId)
+                OrderRequest orderRequest = orderRequestMapper.findByBrokerOrderNo(brokerOrderNo)
                         .orElse(null);
+                Long orderRequestId = orderRequest != null ? orderRequest.getId() : null;
 
                 if (orderRequestId == null) {
                     log.warn("[Execution] order_request 매칭 안됨 (외부 체결 스킵): brokerOrderNo={}", brokerOrderNo);
@@ -109,18 +114,28 @@ public class ExecutionSyncService {
                         ? execAmount.divide(BigDecimal.valueOf(execQty), 0, java.math.RoundingMode.HALF_UP)
                         : BigDecimal.ZERO;
 
+                String orderSide = parseSide(item.orderSideName());
+                PortfolioPosition positionBeforeExecution = null;
+                if (orderRequest != null && "SELL".equals(orderSide)) {
+                    positionBeforeExecution = portfolioPositionMapper.findByAccountNoAndStockCode(
+                            orderRequest.getAccountNo(), orderRequest.getStockCode()
+                    ).orElse(null);
+                }
+
                 // order_execution 저장
                 OrderExecution execution = OrderExecution.builder()
                         .orderRequestId(orderRequestId)
                         .brokerOrderNo(brokerOrderNo)
                         .stockCode(item.stockCode())
-                        .orderSide(parseSide(item.orderSideName()))
+                        .orderSide(orderSide)
                         .executedQuantity(execQty)
                         .executedPrice(execPrice)
                         .executedAmount(execAmount)
                         .executedAt(executedAt)
                         .build();
                 orderExecutionMapper.insert(execution);
+                realizedProfitLossService.recordSellExecution(
+                        execution, orderRequest, positionBeforeExecution);
                 savedCount++;
 
                 // order_request 상태: ORDERED → FILLED

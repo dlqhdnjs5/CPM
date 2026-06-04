@@ -90,6 +90,29 @@
         ORDER BY a.created_at DESC
     </select>
 
+    <select id="findPendingDecisions" resultType="com.bowon.cpm.ai.domain.AiDecision">
+        SELECT a.id, a.stock_code, a.stock_name, a.decision, a.confidence,
+               a.current_price, a.target_price, a.stop_loss_price,
+               a.expected_return_rate, a.expected_loss_rate, a.risk_reward_ratio,
+               a.recommended_portfolio_weight, a.expected_holding_days,
+               a.risk_level, a.reason, a.raw_response_id, a.decision_status, a.created_at
+        FROM ai_decision a
+        INNER JOIN (
+            SELECT stock_code, MAX(created_at) AS max_created
+            FROM ai_decision
+            WHERE decision_status = #{decisionStatus}
+              AND decision IN ('BUY', 'SELL')
+              AND created_at &gt;= #{since}
+            GROUP BY stock_code
+        ) latest
+          ON latest.stock_code = a.stock_code
+         AND latest.max_created = a.created_at
+        WHERE a.decision_status = #{decisionStatus}
+          AND a.decision IN ('BUY', 'SELL')
+          AND a.created_at &gt;= #{since}
+        ORDER BY a.created_at DESC
+    </select>
+
     <update id="expireStaleDecisions">
         UPDATE ai_decision
         SET decision_status = 'EXPIRED'
@@ -146,6 +169,24 @@
         WHERE created_at &gt;= #{from}
           AND created_at &lt; #{to}
         ORDER BY created_at ASC
+    </select>
+
+    <select id="findLatestBuyForActivePosition"
+            resultType="com.bowon.cpm.ai.domain.AiDecision">
+        SELECT a.id, a.stock_code, a.stock_name, a.decision, a.confidence,
+               a.current_price, a.target_price, a.stop_loss_price,
+               a.expected_return_rate, a.expected_loss_rate, a.risk_reward_ratio,
+               a.recommended_portfolio_weight, a.expected_holding_days,
+               a.risk_level, a.reason, a.raw_response_id, a.decision_status, a.created_at
+        FROM ai_decision a
+        INNER JOIN order_request o
+          ON o.ai_decision_id = a.id
+         AND o.order_side = 'BUY'
+         AND o.order_status IN ('ORDERED', 'PARTIALLY_FILLED', 'FILLED')
+        WHERE a.stock_code = #{stockCode}
+          AND a.decision = 'BUY'
+        ORDER BY o.requested_at DESC, a.created_at DESC
+        LIMIT 1
     </select>
 
 </mapper>

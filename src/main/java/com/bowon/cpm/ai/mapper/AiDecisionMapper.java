@@ -40,6 +40,11 @@ public interface AiDecisionMapper {
             @Param("since") LocalDateTime since
     );
 
+    List<AiDecision> findPendingDecisions(
+            @Param("decisionStatus") String decisionStatus,
+            @Param("since") LocalDateTime since
+    );
+
     /**
      * 오래된 CREATED 판단을 EXPIRED로 일괄 만료 처리.
      * - decision_status = 'CREATED'
@@ -67,5 +72,7 @@ public interface AiDecisionMapper {
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to
     );
+
+    Optional<AiDecision> findLatestBuyForActivePosition(@Param("stockCode") String stockCode);
 }
 

@@ -27,6 +27,17 @@
         LIMIT 1
     </select>
 
+    <select id="findById" parameterType="long"
+            resultType="com.bowon.cpm.order.domain.OrderRequest">
+        SELECT id, ai_decision_id, account_no, broker_type, stock_code,
+               order_side, order_type, order_price, order_quantity, order_amount,
+               order_status, idempotency_key, request_reason, broker_order_no,
+               requested_at, updated_at
+        FROM order_request
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
     <update id="updateBrokerOrderNo">
         UPDATE order_request
         SET broker_order_no = #{brokerOrderNo},
@@ -65,6 +76,26 @@
         FROM order_request
         WHERE broker_order_no = #{brokerOrderNo}
         LIMIT 1
+    </select>
+
+    <select id="existsSellByTrigger" resultType="boolean">
+        SELECT COUNT(*) &gt; 0
+        FROM order_request
+        WHERE ai_decision_id = #{aiDecisionId}
+          AND order_side = 'SELL'
+          AND request_reason LIKE CONCAT('SELL[', #{trigger}, ']%')
+          AND order_status IN ('READY', 'ORDERED', 'PARTIALLY_FILLED', 'FILLED')
+    </select>
+
+    <select id="existsTodaySellByTrigger" resultType="boolean">
+        SELECT COUNT(*) &gt; 0
+        FROM order_request
+        WHERE ai_decision_id = #{aiDecisionId}
+          AND order_side = 'SELL'
+          AND request_reason LIKE CONCAT('SELL[', #{trigger}, ']%')
+          AND requested_at &gt;= CURDATE()
+          AND requested_at &lt; DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+          AND order_status IN ('READY', 'ORDERED', 'PARTIALLY_FILLED', 'FILLED')
     </select>
 
 </mapper>

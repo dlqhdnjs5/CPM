@@ -12,6 +12,8 @@ import com.bowon.cpm.risk.domain.RiskPolicyConfig;
 import com.bowon.cpm.risk.mapper.RiskCheckResultMapper;
 import com.bowon.cpm.risk.mapper.RiskPolicyConfigMapper;
 import com.bowon.cpm.risk.rule.RiskManager;
+import com.bowon.cpm.risk.rule.SellRiskManager;
+import com.bowon.cpm.order.trigger.SellTrigger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,7 @@ public class RiskService {
     private static final String DEFAULT_POLICY_CODE = "DEFAULT_RISK_POLICY";
 
     private final RiskManager riskManager;
+    private final SellRiskManager sellRiskManager;
     private final RiskPolicyConfigMapper riskPolicyConfigMapper;
     private final RiskCheckResultMapper riskCheckResultMapper;
     private final AiDecisionMapper aiDecisionMapper;
@@ -90,7 +93,18 @@ public class RiskService {
         }
 
         // 6. 리스크 검증
-        String failReason = riskManager.check(decision, policy, availableCash, totalAsset, currentPositionAmount);
+        String failReason;
+        if ("SELL".equals(decision.getDecision())) {
+            failReason = sellRiskManager.check(
+                    decision,
+                    policy,
+                    posOpt.orElse(null),
+                    1,
+                    SellTrigger.AI_DECISION
+            );
+        } else {
+            failReason = riskManager.check(decision, policy, availableCash, totalAsset, currentPositionAmount);
+        }
         boolean passed = (failReason == null);
 
         log.info("[Risk] 검증 결과: aiDecisionId={}, stockCode={}, decision={}, passed={}, failReason={}",

@@ -22,5 +22,15 @@
         WHERE scheduler_name = #{schedulerName} AND status = 'RUNNING'
     </select>
 
+    <update id="expireStaleRunning">
+        UPDATE scheduler_execution_log
+        SET status = 'FAILED',
+            execution_message = #{executionMessage},
+            finished_at = NOW()
+        WHERE scheduler_name = #{schedulerName}
+          AND status = 'RUNNING'
+          AND started_at &lt; #{timeoutBefore}
+    </update>
+
 </mapper>
 

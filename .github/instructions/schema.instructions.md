@@ -56,6 +56,7 @@ description: 'DB 스키마 참조 및 변경 규칙'
 - `portfolio_position` (PK: id, UK: account_no+stock_code) - 현재 보유 종목
 - `portfolio_snapshot` (PK: id) - 포트폴리오 스냅샷
 - `portfolio_profit_loss` (PK: id, UK: account_no+stock_code+base_date+evaluation_type) - 수익률
+- `portfolio_realized_profit_loss` (PK: id, UK: order_execution_id) - SELL 체결별 실현손익
 
 ### 6. 주문/체결
 - `order_request` (PK: id, UK: idempotency_key) - 주문 요청
@@ -88,7 +89,7 @@ description: 'DB 스키마 참조 및 변경 규칙'
 | order_request | order_side | BUY, SELL |
 | order_request | order_type | MARKET, LIMIT |
 | order_request | order_status | READY, ORDERED, PARTIALLY_FILLED, FILLED, FAILED, CANCELLED |
-| ai_feedback | evaluation_type | DAILY, WEEKLY, MONTHLY |
+| ai_feedback | evaluation_type | DAILY, WEEKLY, MONTHLY, HOLDING_END |
 | news_sentiment | sentiment | POSITIVE, NEUTRAL, NEGATIVE |
 | ai_decision_factor | factor_type | TECHNICAL, NEWS, DART, FUNDAMENTAL, SUPPLY_DEMAND |
 | ai_decision_factor | factor_direction | POSITIVE, NEGATIVE, NEUTRAL |

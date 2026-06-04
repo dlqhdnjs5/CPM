@@ -15,7 +15,7 @@ import java.util.List;
 /**
  * 주문 실행 스케줄러
  * - 장중 매 30분 (AI 판단 5분 후): 09:35, 10:05, ..., 15:05
- * - CREATED 상태인 BUY 판단 → 리스크 검증 → 통과 시 주문
+ * - CREATED 상태인 BUY/SELL 판단 → 리스크 검증 → 통과 시 주문
  */
 @Slf4j
 @Component
@@ -55,8 +55,8 @@ public class OrderExecutionScheduler {
             // 1. 윈도우 벗어난 낡은 CREATED 판단은 EXPIRED 처리 (중복/추격 매수 방지)
             int expired = aiDecisionMapper.expireStaleDecisions(now.minusMinutes(EXPIRE_AFTER_MINUTES));
 
-            // 2. 직전 사이클 이내 생성된 CREATED + BUY 판단 (종목별 최신 1건)
-            List<AiDecision> pendingDecisions = aiDecisionMapper.findPendingBuyDecisions(
+            // 2. 직전 사이클 이내 생성된 CREATED + BUY/SELL 판단 (종목별 최신 1건)
+            List<AiDecision> pendingDecisions = aiDecisionMapper.findPendingDecisions(
                     "CREATED",
                     now.minusMinutes(FRESH_WINDOW_MINUTES)
             );
