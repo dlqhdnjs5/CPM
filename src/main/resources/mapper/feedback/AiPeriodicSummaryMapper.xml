@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bowon.cpm.feedback.mapper.AiPeriodicSummaryMapper">
+
+    <!-- INSERT IGNORE — UK: summary_type + period_start + period_end -->
+    <insert id="insertIgnore" parameterType="com.bowon.cpm.feedback.domain.AiPeriodicSummary"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT IGNORE INTO ai_periodic_summary (
+            summary_type, period_start, period_end,
+            stats_json, llm_summary, created_at
+        ) VALUES (
+            #{summaryType}, #{periodStart}, #{periodEnd},
+            CAST(#{statsJson} AS JSON), #{llmSummary}, NOW()
+        )
+    </insert>
+
+    <select id="findLatestBySummaryType"
+            resultType="com.bowon.cpm.feedback.domain.AiPeriodicSummary">
+        SELECT id, summary_type, period_start, period_end,
+               stats_json, llm_summary, created_at
+        FROM ai_periodic_summary
+        WHERE summary_type = #{summaryType}
+        ORDER BY period_end DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findByTypeAndPeriod"
+            resultType="com.bowon.cpm.feedback.domain.AiPeriodicSummary">
+        SELECT id, summary_type, period_start, period_end,
+               stats_json, llm_summary, created_at
+        FROM ai_periodic_summary
+        WHERE summary_type = #{summaryType}
+          AND period_start = #{periodStart}
+          AND period_end = #{periodEnd}
+        LIMIT 1
+    </select>
+
+    <select id="findRecent"
+            resultType="com.bowon.cpm.feedback.domain.AiPeriodicSummary">
+        SELECT id, summary_type, period_start, period_end,
+               stats_json, llm_summary, created_at
+        FROM ai_periodic_summary
+        WHERE summary_type = #{summaryType}
+        ORDER BY period_end DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>
+

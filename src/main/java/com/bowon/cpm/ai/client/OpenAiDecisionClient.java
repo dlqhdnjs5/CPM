@@ -133,6 +133,9 @@ public class OpenAiDecisionClient {
      * AI 매매 판단 JSON Schema 정의
      * strict:true 이므로 additionalProperties:false 필수
      * required에 모든 필드 포함 필수
+     *
+     * P3 확장: analysis 객체 + factors 배열 추가
+     * - strict 모드에서 null 허용을 위해 type을 ["string", "null"] / ["number", "null"]로 union
      */
     private Map<String, Object> buildDecisionSchema() {
         // Map.of()는 최대 10쌍 제한 → Map.ofEntries() 사용
@@ -152,6 +155,11 @@ public class OpenAiDecisionClient {
         properties.put("riskLevel", Map.of("type", "string", "enum", List.of("LOW", "MEDIUM", "HIGH")));
         properties.put("reason", Map.of("type", "string"));
 
+        // === P3: analysis 객체 (각 sub-field는 nullable) ===
+        properties.put("analysis", buildAnalysisSchema());
+        // === P3: factors 배열 (빈 배열 허용) ===
+        properties.put("factors", buildFactorsSchema());
+
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("type", "object");
         schema.put("additionalProperties", false);
@@ -160,10 +168,67 @@ public class OpenAiDecisionClient {
                 "currentPrice", "targetPrice", "stopLossPrice",
                 "expectedReturnRate", "expectedLossRate", "riskRewardRatio",
                 "recommendedPortfolioWeight", "expectedHoldingDays",
-                "riskLevel", "reason"
+                "riskLevel", "reason",
+                "analysis", "factors"
         ));
         schema.put("properties", properties);
         return schema;
+    }
+
+    /**
+     * analysis 객체 스키마.
+     * 영역별 분석 텍스트. 데이터 부족 시 null 허용.
+     */
+    private Map<String, Object> buildAnalysisSchema() {
+        // strict 모드에서 nullable 처리: type 을 ["string","null"] 로
+        Map<String, Object> nullableString = Map.of("type", List.of("string", "null"));
+
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("technicalAnalysis", nullableString);
+        props.put("newsAnalysis", nullableString);
+        props.put("disclosureAnalysis", nullableString);
+        props.put("fundamentalAnalysis", nullableString);
+        props.put("supplyDemandAnalysis", nullableString);
+
+        Map<String, Object> obj = new LinkedHashMap<>();
+        obj.put("type", "object");
+        obj.put("additionalProperties", false);
+        obj.put("required", List.of(
+                "technicalAnalysis", "newsAnalysis",
+                "disclosureAnalysis", "fundamentalAnalysis",
+                "supplyDemandAnalysis"
+        ));
+        obj.put("properties", props);
+        return obj;
+    }
+
+    /**
+     * factors 배열 스키마.
+     * 각 factor는 type/direction/score/summary 4필드 모두 필수.
+     */
+    private Map<String, Object> buildFactorsSchema() {
+        Map<String, Object> itemProps = new LinkedHashMap<>();
+        itemProps.put("type", Map.of(
+                "type", "string",
+                "enum", List.of("TECHNICAL", "NEWS", "DART", "FUNDAMENTAL", "SUPPLY_DEMAND")
+        ));
+        itemProps.put("direction", Map.of(
+                "type", "string",
+                "enum", List.of("POSITIVE", "NEGATIVE", "NEUTRAL")
+        ));
+        itemProps.put("score", Map.of("type", "number", "minimum", 0, "maximum", 1));
+        itemProps.put("summary", Map.of("type", "string"));
+
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("type", "object");
+        item.put("additionalProperties", false);
+        item.put("required", List.of("type", "direction", "score", "summary"));
+        item.put("properties", itemProps);
+
+        Map<String, Object> arr = new LinkedHashMap<>();
+        arr.put("type", "array");
+        arr.put("items", item);
+        return arr;
     }
 }
 

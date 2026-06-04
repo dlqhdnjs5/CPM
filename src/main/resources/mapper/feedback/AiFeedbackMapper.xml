@@ -66,5 +66,56 @@
         LIMIT 1
     </select>
 
+    <!-- 종목 + 평가타입 필터 (Plan 14 Phase 1: DAILY 제외용) -->
+    <select id="findRecentByStockCodeAndTypes"
+            resultType="com.bowon.cpm.feedback.domain.AiFeedback">
+        SELECT
+            id, ai_decision_id, stock_code, evaluation_type,
+            base_price, evaluated_price, highest_price, lowest_price,
+            return_rate, market_return_rate, excess_return_rate,
+            target_reached, stop_loss_reached, success,
+            feedback_summary, evaluated_at
+        FROM ai_feedback
+        WHERE stock_code = #{stockCode}
+          AND evaluation_type IN
+              <foreach collection="types" item="t" open="(" close=")" separator=",">
+                  #{t}
+              </foreach>
+        ORDER BY evaluated_at DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 기간 내 HOLDING_END 평가 집계 (WEEKLY/MONTHLY 통계용) -->
+    <select id="aggregateStatsBetween" resultType="map">
+        SELECT
+            COUNT(*)                                           AS total,
+            SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END)       AS success_cnt,
+            SUM(CASE WHEN target_reached = 1 THEN 1 ELSE 0 END) AS target_cnt,
+            SUM(CASE WHEN stop_loss_reached = 1 THEN 1 ELSE 0 END) AS stop_loss_cnt,
+            AVG(return_rate)                                   AS avg_return,
+            MAX(return_rate)                                   AS max_return,
+            MIN(return_rate)                                   AS min_return
+        FROM ai_feedback
+        WHERE evaluation_type = 'HOLDING_END'
+          AND evaluated_at &gt;= #{from}
+          AND evaluated_at &lt;  DATE_ADD(#{to}, INTERVAL 1 DAY)
+    </select>
+
+    <!-- 기간 내 HOLDING_END 목록 -->
+    <select id="findHoldingEndBetween"
+            resultType="com.bowon.cpm.feedback.domain.AiFeedback">
+        SELECT
+            id, ai_decision_id, stock_code, evaluation_type,
+            base_price, evaluated_price, highest_price, lowest_price,
+            return_rate, market_return_rate, excess_return_rate,
+            target_reached, stop_loss_reached, success,
+            feedback_summary, evaluated_at
+        FROM ai_feedback
+        WHERE evaluation_type = 'HOLDING_END'
+          AND evaluated_at &gt;= #{from}
+          AND evaluated_at &lt;  #{to}
+        ORDER BY evaluated_at ASC
+    </select>
+
 </mapper>
 

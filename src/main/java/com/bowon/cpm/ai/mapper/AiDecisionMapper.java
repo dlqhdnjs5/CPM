@@ -49,5 +49,23 @@ public interface AiDecisionMapper {
 
     /** 오늘 생성된 BUY/SELL 판단 조회 (피드백 대상) */
     List<AiDecision> findTodayDecisions();
+
+    /**
+     * 보유 기간(expected_holding_days) 만기가 도래한 BUY/SELL 판단 중
+     * 아직 HOLDING_END 피드백이 없는 건을 조회.
+     *
+     * 조건:
+     *  - decision IN ('BUY','SELL')
+     *  - expected_holding_days IS NOT NULL
+     *  - DATE(created_at) + INTERVAL expected_holding_days DAY <= #{today}
+     *  - LEFT JOIN ai_feedback WHERE evaluation_type='HOLDING_END' AND id IS NULL
+     */
+    List<AiDecision> findHoldingDayMaturedDecisions(@Param("today") java.time.LocalDate today);
+
+    /** 기간 내 생성된 BUY/SELL 판단 조회 (WEEKLY/MONTHLY 통계용) */
+    List<AiDecision> findDecisionsBetween(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
+    );
 }
 

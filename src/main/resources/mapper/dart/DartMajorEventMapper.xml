@@ -33,5 +33,18 @@
         WHERE id = #{id}
     </update>
 
+    <!-- 종목 + event_date since 이후 (AI 판단 프롬프트용) -->
+    <select id="findByStockCodeAndDateAfter"
+            resultType="com.bowon.cpm.dart.domain.DartMajorEvent">
+        SELECT id, corp_code, stock_code, receipt_no, event_type,
+               event_title, event_date, importance_score, summary, created_at
+        FROM dart_major_event
+        WHERE stock_code = #{stockCode}
+          AND event_date IS NOT NULL
+          AND event_date >= #{since}
+        ORDER BY event_date DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>
 

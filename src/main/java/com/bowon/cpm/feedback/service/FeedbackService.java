@@ -1,16 +1,23 @@
 package com.bowon.cpm.feedback.service;
 
+import com.bowon.cpm.ai.client.OpenAiDecisionClient;
+import com.bowon.cpm.ai.client.OpenAiProperties;
+import com.bowon.cpm.ai.client.dto.OpenAiResponse;
 import com.bowon.cpm.ai.domain.AiDecision;
 import com.bowon.cpm.ai.mapper.AiDecisionMapper;
 import com.bowon.cpm.broker.BrokerClient;
 import com.bowon.cpm.broker.dto.StockQuoteResult;
 import com.bowon.cpm.broker.kis.KisProperties;
 import com.bowon.cpm.feedback.domain.AiFeedback;
+import com.bowon.cpm.feedback.domain.AiPeriodicSummary;
 import com.bowon.cpm.feedback.domain.PortfolioProfitLoss;
 import com.bowon.cpm.feedback.mapper.AiFeedbackMapper;
+import com.bowon.cpm.feedback.mapper.AiPeriodicSummaryMapper;
 import com.bowon.cpm.feedback.mapper.PortfolioProfitLossMapper;
+import com.bowon.cpm.market.mapper.StockPriceDailyMapper;
 import com.bowon.cpm.portfolio.domain.AccountBalance;
 import com.bowon.cpm.portfolio.mapper.AccountBalanceMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,7 +26,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * AI 피드백 서비스
@@ -38,6 +50,12 @@ public class FeedbackService {
     private final AccountBalanceMapper accountBalanceMapper;
     private final BrokerClient brokerClient;
     private final KisProperties kisProperties;
+
+    private final StockPriceDailyMapper stockPriceDailyMapper;
+    private final AiPeriodicSummaryMapper aiPeriodicSummaryMapper;
+    private final OpenAiDecisionClient openAiDecisionClient;
+    private final OpenAiProperties openAiProperties;
+    private final ObjectMapper objectMapper;
 
     /**
      * AI 판단 단건 피드백 평가
@@ -236,6 +254,228 @@ public class FeedbackService {
 
         sb.append(String.format(" (판단가: %.0f → 현재가: %.0f)", decision.getCurrentPrice(), currentPrice));
         return sb.toString();
+    }
+
+    // =========================================================================
+    // Plan 14 Phase 2: HoldingDay 피드백
+    // =========================================================================
+
+    /**
+     * AI가 제시한 expected_holding_days 만기 시점 평가.
+     * - 기간 중 최고가/최저가로 target_reached/stop_loss_reached 판정
+     * - evaluation_type='HOLDING_END' 로 ai_feedback 저장
+     * - 이미 저장된 경우 INSERT IGNORE 로 무시
+     */
+    @Transactional
+    public AiFeedback evaluateHoldingDayEnd(Long aiDecisionId) {
+        AiDecision decision = aiDecisionMapper.findById(aiDecisionId)
+                .orElseThrow(() -> new IllegalArgumentException("AI 판단 없음: id=" + aiDecisionId));
+
+        if (decision.getExpectedHoldingDays() == null) {
+            throw new IllegalArgumentException("expected_holding_days 없음: id=" + aiDecisionId);
+        }
+
+        LocalDate startDate = decision.getCreatedAt().toLocalDate();
+        LocalDate endDate = startDate.plusDays(decision.getExpectedHoldingDays());
+        LocalDate today = LocalDate.now();
+        if (endDate.isAfter(today)) {
+            // 아직 만기 전 — 강제 호출시 오늘까지로 계산
+            endDate = today;
+        }
+
+        BigDecimal basePrice = decision.getCurrentPrice();
+        BigDecimal highest = null;
+        BigDecimal lowest = null;
+        BigDecimal lastClose = null;
+        try {
+            Map<String, Object> hl = stockPriceDailyMapper.findHighLowInRange(
+                    decision.getStockCode(), startDate, endDate);
+            if (hl != null) {
+                highest = toBigDecimal(hl.get("high"));
+                lowest = toBigDecimal(hl.get("low"));
+                lastClose = toBigDecimal(hl.get("last_close"));
+            }
+        } catch (Exception e) {
+            log.warn("[Feedback] 일봉 집계 실패: stockCode={}, error={}",
+                    decision.getStockCode(), e.getMessage());
+        }
+
+        BigDecimal evaluatedPrice = lastClose != null ? lastClose : basePrice;
+
+        BigDecimal returnRate = null;
+        if (basePrice != null && basePrice.compareTo(BigDecimal.ZERO) > 0 && evaluatedPrice != null) {
+            returnRate = evaluatedPrice.subtract(basePrice)
+                    .divide(basePrice, 6, RoundingMode.HALF_UP)
+                    .multiply(new BigDecimal("100"))
+                    .setScale(4, RoundingMode.HALF_UP);
+        }
+
+        Boolean targetReached = null;
+        Boolean stopLossReached = null;
+        if ("BUY".equals(decision.getDecision())) {
+            if (decision.getTargetPrice() != null && highest != null) {
+                targetReached = highest.compareTo(decision.getTargetPrice()) >= 0;
+            }
+            if (decision.getStopLossPrice() != null && lowest != null) {
+                stopLossReached = lowest.compareTo(decision.getStopLossPrice()) <= 0;
+            }
+        } else if ("SELL".equals(decision.getDecision())) {
+            if (decision.getTargetPrice() != null && lowest != null) {
+                targetReached = lowest.compareTo(decision.getTargetPrice()) <= 0;
+            }
+            if (decision.getStopLossPrice() != null && highest != null) {
+                stopLossReached = highest.compareTo(decision.getStopLossPrice()) >= 0;
+            }
+        }
+
+        Boolean success = null;
+        if (targetReached != null && stopLossReached != null) {
+            success = targetReached && !stopLossReached;
+        } else if (targetReached != null) {
+            success = targetReached;
+        }
+
+        String summary = buildHoldingEndSummary(decision, returnRate, highest, lowest,
+                targetReached, stopLossReached, success);
+
+        AiFeedback feedback = AiFeedback.builder()
+                .aiDecisionId(aiDecisionId)
+                .stockCode(decision.getStockCode())
+                .evaluationType("HOLDING_END")
+                .basePrice(basePrice)
+                .evaluatedPrice(evaluatedPrice)
+                .highestPrice(highest)
+                .lowestPrice(lowest)
+                .returnRate(returnRate)
+                .targetReached(targetReached)
+                .stopLossReached(stopLossReached)
+                .success(success)
+                .feedbackSummary(summary)
+                .build();
+
+        aiFeedbackMapper.insertIgnore(feedback);
+        log.info("[Feedback] HOLDING_END 저장: aiDecisionId={}, returnRate={}%, success={}",
+                aiDecisionId, returnRate, success);
+        return feedback;
+    }
+
+    private String buildHoldingEndSummary(
+            AiDecision d, BigDecimal returnRate, BigDecimal high, BigDecimal low,
+            Boolean targetReached, Boolean stopLossReached, Boolean success) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("[%s %s] %d일 보유 종료",
+                d.getDecision(), d.getStockCode(),
+                d.getExpectedHoldingDays() == null ? 0 : d.getExpectedHoldingDays()));
+        if (returnRate != null) sb.append(String.format(": 수익률 %+.2f%%", returnRate));
+        if (high != null) sb.append(String.format(", 최고 %.0f", high));
+        if (low != null) sb.append(String.format(", 최저 %.0f", low));
+        if (Boolean.TRUE.equals(targetReached)) sb.append(" / 목표가 도달 O");
+        else if (Boolean.FALSE.equals(targetReached)) sb.append(" / 목표가 미도달");
+        if (Boolean.TRUE.equals(stopLossReached)) sb.append(" / 손절가 도달");
+        if (Boolean.TRUE.equals(success)) sb.append(" → 성공");
+        else if (Boolean.FALSE.equals(success)) sb.append(" → 실패");
+        return sb.toString();
+    }
+
+    private BigDecimal toBigDecimal(Object o) {
+        if (o == null) return null;
+        if (o instanceof BigDecimal) return (BigDecimal) o;
+        if (o instanceof Number) return new BigDecimal(o.toString());
+        return null;
+    }
+
+    // =========================================================================
+    // Plan 14 Phase 3 / Phase 4: WEEKLY / MONTHLY 피드백
+    // =========================================================================
+
+    /**
+     * 주간 피드백 집계 + OpenAI 요약 생성 → ai_periodic_summary 저장
+     * @param weekStart 주간 시작일 (월)
+     * @param weekEnd   주간 종료일 (금)
+     */
+    @Transactional
+    public AiPeriodicSummary evaluateWeekly(LocalDate weekStart, LocalDate weekEnd) {
+        return evaluatePeriodic("WEEKLY", weekStart, weekEnd);
+    }
+
+    /**
+     * 월간 피드백 집계 + OpenAI 요약 생성 → ai_periodic_summary 저장
+     * @param monthStart 월 시작일 (1일)
+     * @param monthEnd   월 종료일 (말일)
+     */
+    @Transactional
+    public AiPeriodicSummary evaluateMonthly(LocalDate monthStart, LocalDate monthEnd) {
+        return evaluatePeriodic("MONTHLY", monthStart, monthEnd);
+    }
+
+    private AiPeriodicSummary evaluatePeriodic(String type, LocalDate from, LocalDate to) {
+        // 1. ai_feedback 통계
+        Map<String, Object> agg = aiFeedbackMapper.aggregateStatsBetween(from, to);
+
+        // 2. 기간 내 BUY/SELL 판단 분포
+        List<AiDecision> decisions = aiDecisionMapper.findDecisionsBetween(
+                from.atStartOfDay(),
+                to.plusDays(1).atStartOfDay());
+
+        Map<String, Integer> decisionDist = new LinkedHashMap<>();
+        decisionDist.put("BUY", 0);
+        decisionDist.put("SELL", 0);
+        decisionDist.put("HOLD", 0);
+        Map<String, int[]> confidenceBucket = new LinkedHashMap<>();
+        confidenceBucket.put("0.7-0.8", new int[]{0, 0});
+        confidenceBucket.put("0.8-0.9", new int[]{0, 0});
+        confidenceBucket.put("0.9-1.0", new int[]{0, 0});
+        for (AiDecision d : decisions) {
+            decisionDist.merge(d.getDecision(), 1, Integer::sum);
+            if (d.getConfidence() != null) {
+                double c = d.getConfidence().doubleValue();
+                String key = c >= 0.9 ? "0.9-1.0" : c >= 0.8 ? "0.8-0.9" : c >= 0.7 ? "0.7-0.8" : null;
+                if (key != null) confidenceBucket.get(key)[0]++;
+            }
+        }
+
+        // 3. stats_json 구성
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("period", Map.of("from", from.toString(), "to", to.toString()));
+        stats.put("aggregate", agg != null ? agg : Map.of());
+        stats.put("decisionDistribution", decisionDist);
+        stats.put("confidenceBucketCount", confidenceBucket);
+        stats.put("totalDecisions", decisions.size());
+
+        String statsJson;
+        try {
+            statsJson = objectMapper.writeValueAsString(stats);
+        } catch (Exception e) {
+            statsJson = "{}";
+            log.warn("[Feedback] stats_json 직렬화 실패: {}", e.getMessage());
+        }
+
+        // 4. OpenAI 요약 생성 (실패 시 폴백 텍스트)
+        String llmSummary;
+        try {
+            String system = "너는 한국 주식 자동매매 시스템의 AI 판단 품질을 분석하는 분석가다. "
+                    + "아래 통계 JSON을 보고 한국어로 5~8문장의 간결한 자연어 요약과 개선 제안을 작성해라. "
+                    + "수치가 부족하면 '데이터 부족'으로 명시하고 추측하지 마라.";
+            String user = "[" + type + " 통계]\n" + statsJson;
+            OpenAiResponse resp = openAiDecisionClient.createTextCompletion(
+                    system, user, openAiProperties.modelDecision());
+            llmSummary = resp.extractText();
+        } catch (Exception e) {
+            log.warn("[Feedback] {} 요약 LLM 실패, 폴백: {}", type, e.getMessage());
+            llmSummary = String.format("[%s %s ~ %s] 자동 요약 생성 실패. 판단 %d건.",
+                    type, from, to, decisions.size());
+        }
+
+        AiPeriodicSummary summary = AiPeriodicSummary.builder()
+                .summaryType(type)
+                .periodStart(from)
+                .periodEnd(to)
+                .statsJson(statsJson)
+                .llmSummary(llmSummary)
+                .build();
+        aiPeriodicSummaryMapper.insertIgnore(summary);
+        log.info("[Feedback] {} 요약 저장: {} ~ {}, decisions={}", type, from, to, decisions.size());
+        return summary;
     }
 }
 

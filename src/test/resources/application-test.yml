@@ -1,0 +1,51 @@
+spring:
+  config:
+    activate:
+      on-profile: test
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/cpm?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: ${DB_USERNAME:givememoney}
+    password: ${DB_PASSWORD:givememoney1234}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis:
+  mapper-locations: classpath:mapper/**/*.xml
+  type-aliases-package: com.bowon.cpm
+  configuration:
+    map-underscore-to-camel-case: true
+
+cpm:
+  trading:
+    mode: PAPER
+    enabled: false
+
+external:
+  kis:
+    base-url: http://localhost
+    mock-mode: true
+    app-key: test
+    app-secret: test
+    account-no: 0000-00
+    account-product-code: '01'
+    token-path: /oauth2/tokenP
+    approval-key-path: /test
+  dart:
+    base-url: http://localhost
+    api-key: test
+  naver:
+    base-url: http://localhost
+    client-id: test
+    client-secret: test
+  openai:
+    base-url: http://localhost
+    api-key: test
+    model-decision: gpt-4.1-mini
+    model-summary: gpt-4.1-mini
+    model-review: gpt-4.1
+
+logging:
+  level:
+    com.bowon.cpm: INFO
+    org.mybatis: WARN
+

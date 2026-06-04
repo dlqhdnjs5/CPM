@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.bowon.cpm.market.mapper.StockIndicatorDailyMapper">
+
+    <!-- 종목별 최신 1건 (인덱스: uk_stock_indicator_daily_stock_date) -->
+    <select id="findLatestByStockCode"
+            resultType="com.bowon.cpm.market.domain.StockIndicatorDaily">
+        SELECT id, stock_code, trade_date,
+               ma5, ma20, ma60, ma120,
+               rsi14, macd, macd_signal, macd_histogram,
+               bollinger_upper, bollinger_middle, bollinger_lower,
+               volatility, volume_change_rate, created_at
+        FROM stock_indicator_daily
+        WHERE stock_code = #{stockCode}
+        ORDER BY trade_date DESC
+        LIMIT 1
+    </select>
+
+</mapper>
+

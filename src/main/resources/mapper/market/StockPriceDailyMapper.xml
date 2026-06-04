@@ -59,5 +59,28 @@
         ORDER BY trade_date DESC
     </select>
 
+    <!--
+        기간 내 최고가/최저가/마지막 종가 집계
+        - high: 기간 중 최고가
+        - low : 기간 중 최저가
+        - last_close: 기간 마지막 거래일 종가 (서브쿼리)
+    -->
+    <select id="findHighLowInRange" resultType="map">
+        SELECT
+            MAX(high_price) AS high,
+            MIN(low_price)  AS low,
+            (
+                SELECT close_price
+                FROM stock_price_daily
+                WHERE stock_code = #{stockCode}
+                  AND trade_date BETWEEN #{fromDate} AND #{toDate}
+                ORDER BY trade_date DESC
+                LIMIT 1
+            ) AS last_close
+        FROM stock_price_daily
+        WHERE stock_code = #{stockCode}
+          AND trade_date BETWEEN #{fromDate} AND #{toDate}
+    </select>
+
 </mapper>
 

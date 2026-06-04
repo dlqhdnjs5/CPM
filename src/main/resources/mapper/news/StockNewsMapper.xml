@@ -30,5 +30,20 @@
         LIMIT #{limit}
     </select>
 
+    <!-- 종목 + 발행일(since 이후) 필터 - AI 판단 프롬프트용 (인덱스: stock_code, published_at) -->
+    <select id="findByStockCodeAndPublishedAfter"
+            resultType="com.bowon.cpm.news.domain.StockNews">
+        SELECT
+            id, stock_code, keyword, title, summary,
+            origin_url, origin_url_hash,
+            naver_link, publisher, published_at, collected_at
+        FROM stock_news
+        WHERE stock_code = #{stockCode}
+          AND published_at IS NOT NULL
+          AND published_at >= #{since}
+        ORDER BY published_at DESC, collected_at DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>
 

@@ -109,5 +109,44 @@
         ORDER BY created_at DESC
     </select>
 
+    <!--
+        보유 기간 만기 도래 + HOLDING_END 미평가 판단 조회.
+        - decision IN ('BUY','SELL')
+        - expected_holding_days NOT NULL
+        - DATE(created_at) + INTERVAL expected_holding_days DAY <= #{today}
+        - 같은 ai_decision_id로 HOLDING_END 피드백이 아직 없음
+    -->
+    <select id="findHoldingDayMaturedDecisions"
+            resultType="com.bowon.cpm.ai.domain.AiDecision">
+        SELECT a.id, a.stock_code, a.stock_name, a.decision, a.confidence,
+               a.current_price, a.target_price, a.stop_loss_price,
+               a.expected_return_rate, a.expected_loss_rate, a.risk_reward_ratio,
+               a.recommended_portfolio_weight, a.expected_holding_days,
+               a.risk_level, a.reason, a.raw_response_id, a.decision_status, a.created_at
+        FROM ai_decision a
+        LEFT JOIN ai_feedback f
+          ON f.ai_decision_id = a.id
+         AND f.evaluation_type = 'HOLDING_END'
+        WHERE a.decision IN ('BUY','SELL')
+          AND a.expected_holding_days IS NOT NULL
+          AND DATE_ADD(DATE(a.created_at), INTERVAL a.expected_holding_days DAY) &lt;= #{today}
+          AND f.id IS NULL
+        ORDER BY a.created_at ASC
+    </select>
+
+    <!-- 기간 내 생성된 BUY/SELL 판단 (WEEKLY/MONTHLY 통계용) -->
+    <select id="findDecisionsBetween"
+            resultType="com.bowon.cpm.ai.domain.AiDecision">
+        SELECT id, stock_code, stock_name, decision, confidence,
+               current_price, target_price, stop_loss_price,
+               expected_return_rate, expected_loss_rate, risk_reward_ratio,
+               recommended_portfolio_weight, expected_holding_days,
+               risk_level, reason, raw_response_id, decision_status, created_at
+        FROM ai_decision
+        WHERE created_at &gt;= #{from}
+          AND created_at &lt; #{to}
+        ORDER BY created_at ASC
+    </select>
+
 </mapper>
 

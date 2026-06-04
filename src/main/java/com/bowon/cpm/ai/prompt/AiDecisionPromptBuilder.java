@@ -3,6 +3,9 @@ package com.bowon.cpm.ai.prompt;
 import com.bowon.cpm.dart.domain.DartDisclosure;
 import com.bowon.cpm.dart.domain.DartMajorEvent;
 import com.bowon.cpm.feedback.domain.AiFeedback;
+import com.bowon.cpm.feedback.domain.AiPeriodicSummary;
+import java.time.format.DateTimeFormatter;
+import com.bowon.cpm.market.domain.StockIndicatorDaily;
 import com.bowon.cpm.market.domain.StockPriceDaily;
 import com.bowon.cpm.news.domain.StockNews;
 import org.springframework.stereotype.Component;
@@ -24,18 +27,32 @@ public class AiDecisionPromptBuilder {
                 마크다운, 설명문, 코드블록은 절대 포함하지 않는다. 순수 JSON만 반환한다.
 
                 판단 기준:
-                - 기술적 지표 (이동평균, 거래량, 가격 흐름)
+                - 기술적 지표 (이동평균, RSI, MACD, 볼린저밴드, 거래량)
                 - 최근 뉴스 감성
-                - 공시 내용
-                - 현재 가격 대비 기대수익률 / 예상손실률
+                - 공시/주요 이벤트
+                - 재무 상태
+                - 현재가 대비 기대수익률/예상손실률
+
+                응답 필드 가이드:
+                - decision: BUY / SELL / HOLD 중 하나
+                - currentPrice: 입력으로 제공된 "현재가(실시간)"을 우선 사용. 없으면 최근 일봉 종가 사용.
+                - targetPrice: BUY 시 현재가보다 높게, SELL 시 현재가보다 낮게 설정한다.
+                - stopLossPrice: BUY 시 현재가보다 낮게, SELL 시 현재가보다 높게 설정한다.
+                - confidence: 0.0~1.0 (데이터 부족/판단 모호 시 0.6 이하로 낮춰라)
+                - recommendedPortfolioWeight: 0.0~1.0 (예: 0.15 = 15%)
+                - expectedHoldingDays: 예상 보유 거래일(영업일 기준 권장)
+                - riskLevel: LOW / MEDIUM / HIGH
+                - analysis: 영역별 분석 (technical/news/disclosure/fundamental/supplyDemand).
+                  데이터 없는 영역은 null 로 둔다.
+                - factors: 판단에 영향을 준 요인을 1개 이상 배열로 반환한다.
+                  각 factor 의 type 은 TECHNICAL / NEWS / DART / FUNDAMENTAL / SUPPLY_DEMAND 중 하나.
+                  direction 은 POSITIVE / NEGATIVE / NEUTRAL.
+                  score 는 0.0~1.0 의 영향력.
 
                 규칙:
-                - 데이터가 부족하면 반드시 HOLD를 반환한다.
-                - 보수적으로 판단한다. 불확실하면 HOLD다.
-                - targetPrice는 BUY 시 현재가보다 높아야 한다.
-                - stopLossPrice는 BUY 시 현재가보다 낮아야 한다.
-                - confidence는 0.0~1.0 사이의 소수다.
-                - recommendedPortfolioWeight는 0.0~1.0 사이다 (예: 0.15 = 15%).
+                - 데이터가 부족하면 반드시 HOLD를 반환하고 confidence 를 낮춘다.
+                - 보수적으로 판단한다. 불확실하면 HOLD.
+                - 절대 마크다운/설명문/코드블록을 포함하지 않는다. JSON만.
                 """;
     }
 
@@ -52,6 +69,10 @@ public class AiDecisionPromptBuilder {
      * @param recentFeedbacks 최근 피드백 목록 (null 또는 빈 리스트 허용)
      * @param financialSummary 재무 요약 텍스트 (null 허용)
      * @param majorEvents     주요 이벤트 목록 (null 또는 빈 리스트 허용)
+     * @param indicator      기술적 지표 최신 1건 (null 허용)
+     * @param realtimeQuote  실시간 현재가 (null 허용)
+     * @param weeklySummary  최근 WEEKLY 요약 1건 (ai_periodic_summary, null 허용)
+     * @param monthlySummary 최근 MONTHLY 요약 1건 (ai_periodic_summary, null 허용)
      */
     public String buildUserPrompt(
             String stockCode,
@@ -63,7 +84,11 @@ public class AiDecisionPromptBuilder {
             BigDecimal availableCash,
             List<AiFeedback> recentFeedbacks,
             String financialSummary,
-            List<DartMajorEvent> majorEvents
+            List<DartMajorEvent> majorEvents,
+            StockIndicatorDaily indicator,
+            BigDecimal realtimeQuote,
+            AiPeriodicSummary weeklySummary,
+            AiPeriodicSummary monthlySummary
     ) {
         StringBuilder sb = new StringBuilder();
         sb.append("아래 데이터를 분석해서 매매 판단 JSON을 생성하라.\n\n");
@@ -71,7 +96,11 @@ public class AiDecisionPromptBuilder {
         // 종목 기본 정보
         sb.append("## 종목 정보\n");
         sb.append("종목코드: ").append(stockCode).append("\n");
-        sb.append("종목명: ").append(stockName).append("\n\n");
+        sb.append("종목명: ").append(stockName).append("\n");
+        if (realtimeQuote != null) {
+            sb.append("현재가(실시간): ").append(String.format("%,.0f", realtimeQuote)).append("원\n");
+        }
+        sb.append("\n");
 
         // 계좌 정보 — recommendedPortfolioWeight 결정에 활용
         sb.append("## 계좌 정보\n");
@@ -91,13 +120,33 @@ public class AiDecisionPromptBuilder {
         }
         sb.append("※ recommendedPortfolioWeight는 총 평가자산 대비 비중으로, 실제 주문 가능 금액(예수금)을 초과하지 않도록 판단하라.\n\n");
 
-        // 최근 일봉 (최대 20일)
-        sb.append("## 최근 일봉 (최신순)\n");
+        // 기술적 지표
+        sb.append("## 기술적 지표 (최신)\n");
+        if (indicator == null) {
+            sb.append("데이터 없음\n");
+        } else {
+            sb.append("기준일: ").append(indicator.getTradeDate()).append("\n");
+            appendIfNotNull(sb, "MA5", indicator.getMa5());
+            appendIfNotNull(sb, "MA20", indicator.getMa20());
+            appendIfNotNull(sb, "MA60", indicator.getMa60());
+            appendIfNotNull(sb, "MA120", indicator.getMa120());
+            appendIfNotNull(sb, "RSI14", indicator.getRsi14());
+            appendIfNotNull(sb, "MACD", indicator.getMacd());
+            appendIfNotNull(sb, "MACD Signal", indicator.getMacdSignal());
+            appendIfNotNull(sb, "Bollinger Upper", indicator.getBollingerUpper());
+            appendIfNotNull(sb, "Bollinger Middle", indicator.getBollingerMiddle());
+            appendIfNotNull(sb, "Bollinger Lower", indicator.getBollingerLower());
+            appendIfNotNull(sb, "Volatility", indicator.getVolatility());
+        }
+        sb.append("\n");
+
+        // 최근 일봉 (최대 30일 표시 — 60일 수집 중 최신 30일만 노출하여 토큰 절감)
+        sb.append("## 최근 일봉 (최신순, 최대 30일)\n");
         if (dailyPrices.isEmpty()) {
             sb.append("데이터 없음\n");
         } else {
             sb.append("날짜 | 시가 | 고가 | 저가 | 종가 | 거래량\n");
-            dailyPrices.stream().limit(20).forEach(p ->
+            dailyPrices.stream().limit(30).forEach(p ->
                     sb.append(p.getTradeDate()).append(" | ")
                             .append(p.getOpenPrice()).append(" | ")
                             .append(p.getHighPrice()).append(" | ")
@@ -108,12 +157,12 @@ public class AiDecisionPromptBuilder {
         }
         sb.append("\n");
 
-        // 최근 뉴스 (최대 10건)
-        sb.append("## 최근 뉴스\n");
+        // 최근 뉴스
+        sb.append("## 최근 뉴스 (7일 이내)\n");
         if (newsList.isEmpty()) {
             sb.append("데이터 없음\n");
         } else {
-            newsList.stream().limit(10).forEach(n ->
+            newsList.stream().limit(15).forEach(n ->
                     sb.append("- [").append(n.getPublishedAt() != null
                                     ? n.getPublishedAt().toLocalDate() : "날짜미상")
                             .append("] ").append(n.getTitle()).append("\n")
@@ -122,12 +171,12 @@ public class AiDecisionPromptBuilder {
         }
         sb.append("\n");
 
-        // 최근 공시 (최대 5건)
+        // 공시
         sb.append("## 최근 공시\n");
         if (disclosures.isEmpty()) {
             sb.append("데이터 없음\n");
         } else {
-            disclosures.stream().limit(5).forEach(d ->
+            disclosures.stream().limit(10).forEach(d ->
                     sb.append("- [").append(d.getDisclosureDate()).append("] ")
                             .append(d.getReportName()).append("\n")
             );
@@ -143,12 +192,12 @@ public class AiDecisionPromptBuilder {
         }
         sb.append("\n");
 
-        // 주요 이벤트 (최대 5건)
+        // 주요 이벤트
         sb.append("## ⚠️ 주요 이벤트\n");
         if (majorEvents == null || majorEvents.isEmpty()) {
-            sb.append("최근 6개월 주요 이벤트 없음\n");
+            sb.append("최근 3개월 주요 이벤트 없음\n");
         } else {
-            majorEvents.stream().limit(5).forEach(e ->
+            majorEvents.stream().limit(10).forEach(e ->
                     sb.append("- [").append(e.getEventDate()).append("] ")
                             .append(e.getEventType()).append(": ")
                             .append(e.getSummary() != null ? e.getSummary() : e.getEventTitle())
@@ -157,18 +206,67 @@ public class AiDecisionPromptBuilder {
         }
         sb.append("\n");
 
-        // 과거 AI 판단 피드백 (최대 3건) — 과거 판단 결과를 참고해 판단 품질 개선
-        sb.append("## 과거 판단 피드백\n");
+        // 과거 AI 판단 피드백 (DAILY 제외 — WEEKLY/MONTHLY/HOLDING_END)
+        sb.append("## 과거 판단 피드백 (DAILY 제외)\n");
         if (recentFeedbacks == null || recentFeedbacks.isEmpty()) {
-            sb.append("피드백 없음 (첫 판단)\n");
+            sb.append("피드백 없음 (첫 판단 또는 평가 미진행)\n");
         } else {
             recentFeedbacks.stream().limit(3).forEach(f ->
-                    sb.append("- ").append(f.getFeedbackSummary() != null
-                            ? f.getFeedbackSummary() : "요약 없음").append("\n")
+                    sb.append("- [").append(f.getEvaluationType()).append("] ")
+                            .append(f.getFeedbackSummary() != null
+                                    ? f.getFeedbackSummary() : "요약 없음").append("\n")
             );
         }
+        sb.append("\n");
+
+        // Plan 14 Phase 5: 주간 / 월간 LLM 요약 (ai_periodic_summary)
+        sb.append("## [참고: 지난주 WEEKLY 요약]\n");
+        appendPeriodicSummary(sb, weeklySummary);
+        sb.append("\n");
+
+        sb.append("## [참고: 지난달 MONTHLY 전략 개선 제안]\n");
+        appendPeriodicSummary(sb, monthlySummary);
 
         return sb.toString();
     }
-}
 
+    /**
+     * 하위호환용 오버로드 (WEEKLY/MONTHLY 요약 생략).
+     */
+    public String buildUserPrompt(
+            String stockCode,
+            String stockName,
+            List<StockPriceDaily> dailyPrices,
+            List<StockNews> newsList,
+            List<DartDisclosure> disclosures,
+            BigDecimal totalAsset,
+            BigDecimal availableCash,
+            List<AiFeedback> recentFeedbacks,
+            String financialSummary,
+            List<DartMajorEvent> majorEvents,
+            StockIndicatorDaily indicator,
+            BigDecimal realtimeQuote
+    ) {
+        return buildUserPrompt(stockCode, stockName, dailyPrices, newsList, disclosures,
+                totalAsset, availableCash, recentFeedbacks, financialSummary,
+                majorEvents, indicator, realtimeQuote, null, null);
+    }
+
+    private void appendPeriodicSummary(StringBuilder sb, AiPeriodicSummary s) {
+        if (s == null || s.getLlmSummary() == null || s.getLlmSummary().isBlank()) {
+            sb.append("요약 없음 (아직 집계되지 않음)\n");
+            return;
+        }
+        DateTimeFormatter df = DateTimeFormatter.ISO_LOCAL_DATE;
+        sb.append("기간: ").append(s.getPeriodStart() != null ? s.getPeriodStart().format(df) : "?")
+                .append(" ~ ").append(s.getPeriodEnd() != null ? s.getPeriodEnd().format(df) : "?")
+                .append("\n");
+        sb.append(s.getLlmSummary().trim()).append("\n");
+    }
+
+    private void appendIfNotNull(StringBuilder sb, String label, Object value) {
+        if (value != null) {
+            sb.append(label).append(": ").append(value).append("\n");
+        }
+    }
+}

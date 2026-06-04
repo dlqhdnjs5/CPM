@@ -14,5 +14,13 @@
             #{isParsed}, #{parseError}, NOW()
         )
     </insert>
+
+    <!-- 파싱 실패 시 parse_error 업데이트 -->
+    <update id="updateParseError">
+        UPDATE ai_decision_raw_response
+        SET parse_error = #{parseError},
+            is_parsed = 0
+        WHERE id = #{id}
+    </update>
 </mapper>
 

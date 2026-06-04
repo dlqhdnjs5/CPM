@@ -4,6 +4,7 @@ import com.bowon.cpm.common.response.ApiResponse;
 import com.bowon.cpm.feedback.domain.AiFeedback;
 import com.bowon.cpm.feedback.domain.PortfolioProfitLoss;
 import com.bowon.cpm.feedback.service.FeedbackService;
+import com.bowon.cpm.scheduler.HoldingDayFeedbackScheduler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,6 +17,7 @@ import java.util.Map;
 public class FeedbackController {
 
     private final FeedbackService feedbackService;
+    private final HoldingDayFeedbackScheduler holdingDayFeedbackScheduler;
 
     /**
      * AI 판단 단건 피드백 생성
@@ -63,6 +65,65 @@ public class FeedbackController {
                 "startAsset", result.getStartAssetAmount() != null ? result.getStartAssetAmount() : "N/A",
                 "endAsset", result.getEndAssetAmount() != null ? result.getEndAssetAmount() : "N/A",
                 "returnRate", result.getReturnRate() != null ? result.getReturnRate() : "N/A"
+        ));
+    }
+
+    // ===== Plan 14: 신규 수동 트리거 =====
+
+    /** HOLDING_END 피드백 일괄 평가 (스케줄러 트리거) */
+    @PostMapping("/holding-day/run")
+    public ApiResponse<Void> runHoldingDayAll() {
+        holdingDayFeedbackScheduler.run();
+        return ApiResponse.ok();
+    }
+
+    /** HOLDING_END 피드백 단건 강제 평가 */
+    @PostMapping("/holding-day/decisions/{aiDecisionId}")
+    public ApiResponse<Map<String, Object>> evaluateHoldingDayOne(@PathVariable Long aiDecisionId) {
+        var f = feedbackService.evaluateHoldingDayEnd(aiDecisionId);
+        return ApiResponse.ok("HOLDING_END 평가 완료", Map.of(
+                "aiDecisionId", aiDecisionId,
+                "returnRate", f.getReturnRate() != null ? f.getReturnRate() : "N/A",
+                "success", f.getSuccess() != null ? f.getSuccess() : "N/A",
+                "summary", f.getFeedbackSummary()
+        ));
+    }
+
+    /** 주간 피드백 수동 실행 (기본: 이번 주 월~금) */
+    @PostMapping("/weekly/run")
+    public ApiResponse<Map<String, Object>> runWeekly(
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to
+    ) {
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDate weekStart = from != null ? java.time.LocalDate.parse(from)
+                : today.with(java.time.DayOfWeek.MONDAY);
+        java.time.LocalDate weekEnd = to != null ? java.time.LocalDate.parse(to)
+                : weekStart.plusDays(4);
+        var s = feedbackService.evaluateWeekly(weekStart, weekEnd);
+        return ApiResponse.ok("WEEKLY 요약 저장", Map.of(
+                "from", weekStart.toString(),
+                "to", weekEnd.toString(),
+                "summary", s.getLlmSummary() != null ? s.getLlmSummary() : ""
+        ));
+    }
+
+    /** 월간 피드백 수동 실행 (기본: 전월) */
+    @PostMapping("/monthly/run")
+    public ApiResponse<Map<String, Object>> runMonthly(
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to
+    ) {
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDate first = from != null ? java.time.LocalDate.parse(from)
+                : today.minusMonths(1).withDayOfMonth(1);
+        java.time.LocalDate last = to != null ? java.time.LocalDate.parse(to)
+                : first.withDayOfMonth(first.lengthOfMonth());
+        var s = feedbackService.evaluateMonthly(first, last);
+        return ApiResponse.ok("MONTHLY 요약 저장", Map.of(
+                "from", first.toString(),
+                "to", last.toString(),
+                "summary", s.getLlmSummary() != null ? s.getLlmSummary() : ""
         ));
     }
 }
