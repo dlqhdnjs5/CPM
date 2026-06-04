@@ -2,8 +2,10 @@ package com.bowon.cpm.admin;
 
 import com.bowon.cpm.broker.dto.StockQuoteResult;
 import com.bowon.cpm.common.response.ApiResponse;
+import com.bowon.cpm.market.domain.StockIndicatorDaily;
 import com.bowon.cpm.market.domain.StockPriceDaily;
 import com.bowon.cpm.market.service.MarketDataService;
+import com.bowon.cpm.market.service.TechnicalIndicatorService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +20,7 @@ import java.util.Map;
 public class MarketController {
 
     private final MarketDataService marketDataService;
+    private final TechnicalIndicatorService technicalIndicatorService;
 
     /**
      * 종목 현재가 조회 + stock_realtime_quote 저장
@@ -54,5 +57,22 @@ public class MarketController {
     ) {
         List<StockPriceDaily> prices = marketDataService.getDailyPrices(stockCode, from, to);
         return ApiResponse.ok(prices);
+    }
+
+    @PostMapping("/{stockCode}/indicators/daily/calculate")
+    public ApiResponse<Map<String, Object>> calculateDailyIndicator(@PathVariable String stockCode) {
+        StockIndicatorDaily indicator = technicalIndicatorService.calculateForStock(stockCode);
+        return ApiResponse.ok("기술지표 계산 완료", Map.of(
+                "stockCode", stockCode,
+                "saved", indicator != null,
+                "tradeDate", indicator != null && indicator.getTradeDate() != null
+                        ? indicator.getTradeDate().toString() : "N/A"
+        ));
+    }
+
+    @PostMapping("/indicators/daily/calculate")
+    public ApiResponse<Map<String, Object>> calculateAllDailyIndicators() {
+        int saved = technicalIndicatorService.calculateAllActive();
+        return ApiResponse.ok("전체 기술지표 계산 완료", Map.of("savedCount", saved));
     }
 }

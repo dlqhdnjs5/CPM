@@ -58,6 +58,15 @@ description: 'DB 스키마 참조 및 변경 규칙'
 - `portfolio_profit_loss` (PK: id, UK: account_no+stock_code+base_date+evaluation_type) - 수익률
 - `portfolio_realized_profit_loss` (PK: id, UK: order_execution_id) - SELL 체결별 실현손익
 
+- `paper_account_balance` (PK: id) - PAPER account balance snapshots
+- `paper_portfolio_position` (PK: id, UK: account_no+stock_code) - PAPER-only positions
+- `paper_portfolio_profit_loss` (PK: id, UK: account_no+stock_code+base_date+evaluation_type) - PAPER-only profit/loss
+
+PAPER table columns:
+- `paper_account_balance`: id, account_no, base_datetime, cash_balance, available_cash, total_asset_amount, total_evaluation_amount, total_profit_loss_amount, total_profit_loss_rate, created_at
+- `paper_portfolio_position`: id, account_no, stock_code, stock_name, quantity, available_quantity, average_buy_price, current_price, purchase_amount, valuation_amount, profit_loss_amount, profit_loss_rate, created_at, updated_at
+- `paper_portfolio_profit_loss`: id, account_no, stock_code, base_date, evaluation_type, start_asset_amount, end_asset_amount, realized_profit_loss, unrealized_profit_loss, return_rate, created_at, updated_at
+
 ### 6. 주문/체결
 - `order_request` (PK: id, UK: idempotency_key) - 주문 요청
   - 컬럼: id, ai_decision_id, account_no, broker_type(KIS), stock_code, order_side, order_type, order_price, order_quantity, order_amount, order_status(READY), idempotency_key, request_reason, broker_order_no, **requested_at**, updated_at
@@ -69,6 +78,7 @@ description: 'DB 스키마 참조 및 변경 규칙'
 ### 7. 리스크/전략
 - `risk_policy_config` (PK: id, UK: policy_code) - 리스크 정책 설정
 - `risk_check_result` (PK: id) - 리스크 검증 결과
+  - `trading_mode`: PAPER/REAL. 주문 전 현재 모드와 같은 리스크 결과만 사용한다.
 - `strategy_config` (PK: id, UK: strategy_code) - 매매 전략 설정
 - `strategy_execution_log` (PK: id) - 전략 실행 로그
 
@@ -89,6 +99,7 @@ description: 'DB 스키마 참조 및 변경 규칙'
 | order_request | order_side | BUY, SELL |
 | order_request | order_type | MARKET, LIMIT |
 | order_request | order_status | READY, ORDERED, PARTIALLY_FILLED, FILLED, FAILED, CANCELLED |
+| risk_check_result | trading_mode | PAPER, REAL |
 | ai_feedback | evaluation_type | DAILY, WEEKLY, MONTHLY, HOLDING_END |
 | news_sentiment | sentiment | POSITIVE, NEUTRAL, NEGATIVE |
 | ai_decision_factor | factor_type | TECHNICAL, NEWS, DART, FUNDAMENTAL, SUPPLY_DEMAND |

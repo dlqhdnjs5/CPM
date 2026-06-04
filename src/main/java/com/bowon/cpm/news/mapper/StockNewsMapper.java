@@ -25,5 +25,7 @@ public interface StockNewsMapper {
             @Param("since") LocalDateTime since,
             @Param("limit") int limit
     );
+
+    List<StockNews> findPendingAnalysisTargets(@Param("limit") int limit);
 }
 

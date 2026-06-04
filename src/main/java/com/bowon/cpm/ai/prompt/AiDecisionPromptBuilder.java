@@ -167,6 +167,7 @@ public class AiDecisionPromptBuilder {
                                     ? n.getPublishedAt().toLocalDate() : "날짜미상")
                             .append("] ").append(n.getTitle()).append("\n")
                             .append("  요약: ").append(n.getSummary()).append("\n")
+                            .append(newsSentimentLine(n))
             );
         }
         sb.append("\n");
@@ -268,5 +269,15 @@ public class AiDecisionPromptBuilder {
         if (value != null) {
             sb.append(label).append(": ").append(value).append("\n");
         }
+    }
+
+    private String newsSentimentLine(StockNews news) {
+        if (news.getSentiment() == null) {
+            return "";
+        }
+        return "  sentiment: " + news.getSentiment()
+                + ", sentimentScore=" + news.getSentimentScore()
+                + ", impactScore=" + news.getImpactScore()
+                + "\n";
     }
 }

@@ -3,6 +3,7 @@ package com.bowon.cpm.order.service;
 import com.bowon.cpm.broker.kis.KisExecutionClient;
 import com.bowon.cpm.broker.kis.dto.KisExecutionResponse;
 import com.bowon.cpm.broker.kis.dto.KisExecutionResponse.ExecutionItem;
+import com.bowon.cpm.common.config.TradingProperties;
 import com.bowon.cpm.common.domain.BrokerApiLog;
 import com.bowon.cpm.common.mapper.BrokerApiLogMapper;
 import com.bowon.cpm.feedback.service.RealizedProfitLossService;
@@ -49,6 +50,7 @@ public class ExecutionSyncService {
     private final PortfolioService portfolioService;
     private final RealizedProfitLossService realizedProfitLossService;
     private final BrokerApiLogMapper brokerApiLogMapper;
+    private final TradingProperties tradingProperties;
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HHmmss");
 
@@ -59,6 +61,11 @@ public class ExecutionSyncService {
      */
     @Transactional
     public int syncExecutions() {
+        if (tradingProperties.isPaperMode()) {
+            log.info("[Execution] skipped KIS execution sync in PAPER mode");
+            return 0;
+        }
+
         long start = System.currentTimeMillis();
         boolean success = false;
         String errorMessage = null;

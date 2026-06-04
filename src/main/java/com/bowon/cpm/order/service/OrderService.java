@@ -13,6 +13,7 @@ import com.bowon.cpm.order.mapper.OrderRequestMapper;
 import com.bowon.cpm.order.policy.BuyOrderPolicyEngine;
 import com.bowon.cpm.order.policy.SellOrderPolicyEngine;
 import com.bowon.cpm.order.trigger.SellTrigger;
+import com.bowon.cpm.paper.service.PaperPortfolioService;
 import com.bowon.cpm.portfolio.domain.PortfolioPosition;
 import com.bowon.cpm.portfolio.mapper.PortfolioPositionMapper;
 import com.bowon.cpm.risk.domain.RiskCheckResult;
@@ -47,6 +48,7 @@ public class OrderService {
     private final RiskCheckResultMapper riskCheckResultMapper;
     private final RiskPolicyConfigMapper riskPolicyConfigMapper;
     private final PortfolioPositionMapper portfolioPositionMapper;
+    private final PaperPortfolioService paperPortfolioService;
     private final BrokerClient brokerClient;
     private final KisProperties kisProperties;
     private final TradingProperties tradingProperties;
@@ -100,7 +102,8 @@ public class OrderService {
 
         // 리스크 검증 통과 여부 확인 (passed=true인 최신 건이 있어야 주문 가능)
         if (requireRiskPassed) {
-            boolean riskPassed = riskCheckResultMapper.findLatestByAiDecisionId(aiDecisionId)
+            boolean riskPassed = riskCheckResultMapper.findLatestByAiDecisionIdAndTradingMode(
+                            aiDecisionId, tradingProperties.normalizedMode())
                     .map(RiskCheckResult::getPassed)
                     .orElse(false);
             if (!riskPassed) {
@@ -128,11 +131,21 @@ public class OrderService {
             availableCash = balance.getAvailableCash() != null ? balance.getAvailableCash() : BigDecimal.ZERO;
             totalAsset = balance.getTotalAssetAmount() != null ? balance.getTotalAssetAmount() : BigDecimal.ZERO;
         } catch (Exception e) {
-            if ("BUY".equals(orderSide)) {
+            if ("BUY".equals(orderSide) && !tradingProperties.isPaperMode()) {
                 log.warn("[Order] 잔고 조회 실패 (주문 중단): {}", e.getMessage());
                 throw new IllegalStateException("잔고 조회 실패로 주문 중단: " + e.getMessage());
             }
             log.warn("[Order] SELL 잔고 조회 실패 (totalAsset=0으로 진행): {}", e.getMessage());
+        }
+
+        if (tradingProperties.isPaperMode()) {
+            paperPortfolioService.ensureAccountInitialized(accountNo, availableCash);
+            var paperBalance = paperPortfolioService.findLatestAccountBalance(accountNo)
+                    .orElseThrow(() -> new IllegalStateException("PAPER account balance not initialized"));
+            availableCash = paperBalance.getAvailableCash() != null
+                    ? paperBalance.getAvailableCash() : BigDecimal.ZERO;
+            totalAsset = paperBalance.getTotalAssetAmount() != null
+                    ? paperBalance.getTotalAssetAmount() : BigDecimal.ZERO;
         }
 
         OrderDraft draft = "BUY".equals(orderSide)
@@ -184,9 +197,11 @@ public class OrderService {
             BigDecimal totalAsset,
             SellTrigger sellTrigger
     ) {
-        PortfolioPosition position = portfolioPositionMapper
-                .findByAccountNoAndStockCode(accountNo, decision.getStockCode())
-                .orElse(null);
+        PortfolioPosition position = tradingProperties.isPaperMode()
+                ? paperPortfolioService.findPositionAsPortfolio(accountNo, decision.getStockCode())
+                : portfolioPositionMapper
+                    .findByAccountNoAndStockCode(accountNo, decision.getStockCode())
+                    .orElse(null);
 
         BigDecimal currentPrice = decision.getCurrentPrice();
         try {
@@ -241,8 +256,22 @@ public class OrderService {
      * 주문 목록 조회
      */
     @Transactional(readOnly = true)
-    public List<OrderRequest> getOrders(int limit) {
-        return orderRequestMapper.findByAccountNo(kisProperties.accountNo(), limit);
+    public List<OrderRequest> getOrders(String mode, int limit) {
+        return orderRequestMapper.findByAccountNo(
+                kisProperties.accountNo(),
+                normalizeMode(mode),
+                limit
+        );
+    }
+
+    private String normalizeMode(String mode) {
+        String normalized = mode == null || mode.isBlank()
+                ? tradingProperties.normalizedMode()
+                : mode.trim().toUpperCase();
+        if ("REAL".equals(normalized)) {
+            return "KIS";
+        }
+        return normalized;
     }
 }
 

@@ -62,6 +62,9 @@
                requested_at, updated_at
         FROM order_request
         WHERE account_no = #{accountNo}
+        <if test="mode != null and mode != '' and mode != 'ALL'">
+          AND broker_type = #{mode}
+        </if>
         ORDER BY requested_at DESC
         LIMIT #{limit}
     </select>

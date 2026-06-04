@@ -44,9 +44,10 @@ public class OrderController {
      */
     @GetMapping("/requests")
     public ApiResponse<List<OrderRequest>> getOrders(
+            @RequestParam(required = false) String mode,
             @RequestParam(defaultValue = "20") int limit
     ) {
-        return ApiResponse.ok(orderService.getOrders(limit));
+        return ApiResponse.ok(orderService.getOrders(mode, limit));
     }
 }
 

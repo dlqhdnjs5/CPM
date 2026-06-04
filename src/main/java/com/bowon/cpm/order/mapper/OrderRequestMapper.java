@@ -32,6 +32,7 @@ public interface OrderRequestMapper {
 
     List<OrderRequest> findByAccountNo(
             @Param("accountNo") String accountNo,
+            @Param("mode") String mode,
             @Param("limit") int limit
     );
 

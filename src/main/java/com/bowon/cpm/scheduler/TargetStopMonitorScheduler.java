@@ -5,9 +5,11 @@ import com.bowon.cpm.ai.mapper.AiDecisionMapper;
 import com.bowon.cpm.broker.BrokerClient;
 import com.bowon.cpm.broker.dto.StockQuoteResult;
 import com.bowon.cpm.broker.kis.KisProperties;
+import com.bowon.cpm.common.config.TradingProperties;
 import com.bowon.cpm.order.mapper.OrderRequestMapper;
 import com.bowon.cpm.order.service.OrderService;
 import com.bowon.cpm.order.trigger.SellTrigger;
+import com.bowon.cpm.paper.service.PaperPortfolioService;
 import com.bowon.cpm.portfolio.domain.PortfolioPosition;
 import com.bowon.cpm.portfolio.mapper.PortfolioPositionMapper;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +35,9 @@ public class TargetStopMonitorScheduler {
 
     private final SchedulerLogSupport logSupport;
     private final KisProperties kisProperties;
+    private final TradingProperties tradingProperties;
     private final PortfolioPositionMapper portfolioPositionMapper;
+    private final PaperPortfolioService paperPortfolioService;
     private final AiDecisionMapper aiDecisionMapper;
     private final OrderRequestMapper orderRequestMapper;
     private final BrokerClient brokerClient;
@@ -45,7 +49,9 @@ public class TargetStopMonitorScheduler {
         Long logId = logSupport.start(NAME);
         int checked = 0, ordered = 0, skipped = 0, failed = 0;
         try {
-            List<PortfolioPosition> positions = portfolioPositionMapper.findAllHeld(kisProperties.accountNo());
+            List<PortfolioPosition> positions = tradingProperties.isPaperMode()
+                    ? paperPortfolioService.findAllHeldAsPortfolio(kisProperties.accountNo())
+                    : portfolioPositionMapper.findAllHeld(kisProperties.accountNo());
             for (PortfolioPosition position : positions) {
                 checked++;
                 try {

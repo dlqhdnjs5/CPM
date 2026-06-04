@@ -1,5 +1,6 @@
 package com.bowon.cpm.scheduler;
 
+import com.bowon.cpm.common.config.TradingProperties;
 import com.bowon.cpm.portfolio.service.PortfolioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,7 @@ public class AccountSyncScheduler {
     private static final String NAME = "AccountSyncScheduler";
     private final SchedulerLogSupport logSupport;
     private final PortfolioService portfolioService;
+    private final TradingProperties tradingProperties;
 
     @Scheduled(cron = "0 30 8 * * MON-FRI")
     public void syncMorning() { run(); }
@@ -27,6 +29,10 @@ public class AccountSyncScheduler {
     public void syncAfterClose() { run(); }
 
     private void run() {
+        if (tradingProperties.isPaperMode()) {
+            log.debug("[{}] skipped in PAPER mode", NAME);
+            return;
+        }
         if (!logSupport.isWeekday() || logSupport.isAlreadyRunning(NAME)) return;
         Long logId = logSupport.start(NAME);
         try {

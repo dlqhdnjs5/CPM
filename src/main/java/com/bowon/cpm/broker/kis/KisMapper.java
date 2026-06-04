@@ -21,6 +21,7 @@ public final class KisMapper {
         KisCurrentPriceResponse.Output output = response.output();
         return StockQuoteResult.builder()
                 .stockCode(stockCode)
+                .stockName(output.stockName())
                 .currentPrice(parseBigDecimal(output.currentPrice()))
                 .changePrice(parseBigDecimal(output.changePrice()))
                 .changeRate(parseBigDecimal(output.changeRate()))

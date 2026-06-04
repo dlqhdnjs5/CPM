@@ -21,12 +21,17 @@
     <select id="findByStockCode"
             resultType="com.bowon.cpm.news.domain.StockNews">
         SELECT
-            id, stock_code, keyword, title, summary,
-            origin_url, origin_url_hash,
-            naver_link, publisher, published_at, collected_at
-        FROM stock_news
-        WHERE stock_code = #{stockCode}
-        ORDER BY published_at DESC, collected_at DESC
+            sn.id, sn.stock_code, sn.keyword, sn.title,
+            COALESCE(nas.summary, sn.summary) AS summary,
+            nas.summary AS ai_summary,
+            ns.sentiment, ns.sentiment_score, ns.impact_score,
+            sn.origin_url, sn.origin_url_hash,
+            sn.naver_link, sn.publisher, sn.published_at, sn.collected_at
+        FROM stock_news sn
+        LEFT JOIN news_ai_summary nas ON nas.news_id = sn.id
+        LEFT JOIN news_sentiment ns ON ns.news_id = sn.id
+        WHERE sn.stock_code = #{stockCode}
+        ORDER BY sn.published_at DESC, sn.collected_at DESC
         LIMIT #{limit}
     </select>
 
@@ -34,14 +39,33 @@
     <select id="findByStockCodeAndPublishedAfter"
             resultType="com.bowon.cpm.news.domain.StockNews">
         SELECT
-            id, stock_code, keyword, title, summary,
-            origin_url, origin_url_hash,
-            naver_link, publisher, published_at, collected_at
-        FROM stock_news
-        WHERE stock_code = #{stockCode}
-          AND published_at IS NOT NULL
-          AND published_at >= #{since}
-        ORDER BY published_at DESC, collected_at DESC
+            sn.id, sn.stock_code, sn.keyword, sn.title,
+            COALESCE(nas.summary, sn.summary) AS summary,
+            nas.summary AS ai_summary,
+            ns.sentiment, ns.sentiment_score, ns.impact_score,
+            sn.origin_url, sn.origin_url_hash,
+            sn.naver_link, sn.publisher, sn.published_at, sn.collected_at
+        FROM stock_news sn
+        LEFT JOIN news_ai_summary nas ON nas.news_id = sn.id
+        LEFT JOIN news_sentiment ns ON ns.news_id = sn.id
+        WHERE sn.stock_code = #{stockCode}
+          AND sn.published_at IS NOT NULL
+          AND sn.published_at >= #{since}
+        ORDER BY sn.published_at DESC, sn.collected_at DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="findPendingAnalysisTargets"
+            resultType="com.bowon.cpm.news.domain.StockNews">
+        SELECT
+            sn.id, sn.stock_code, sn.keyword, sn.title, sn.summary,
+            sn.origin_url, sn.origin_url_hash,
+            sn.naver_link, sn.publisher, sn.published_at, sn.collected_at
+        FROM stock_news sn
+        LEFT JOIN news_ai_summary nas ON nas.news_id = sn.id
+        LEFT JOIN news_sentiment ns ON ns.news_id = sn.id
+        WHERE nas.id IS NULL OR ns.id IS NULL
+        ORDER BY sn.published_at DESC, sn.collected_at DESC
         LIMIT #{limit}
     </select>
 

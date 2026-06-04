@@ -3,6 +3,7 @@ package com.bowon.cpm.news.domain;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -25,5 +26,10 @@ public class StockNews {
     private String publisher;
     private LocalDateTime publishedAt;
     private LocalDateTime collectedAt;
+
+    private String aiSummary;
+    private String sentiment;
+    private BigDecimal sentimentScore;
+    private BigDecimal impactScore;
 }
 

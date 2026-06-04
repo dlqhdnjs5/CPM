@@ -1,6 +1,7 @@
 package com.bowon.cpm.admin;
 
 import com.bowon.cpm.common.response.ApiResponse;
+import com.bowon.cpm.common.config.TradingProperties;
 import com.bowon.cpm.order.domain.OrderExecution;
 import com.bowon.cpm.order.mapper.OrderExecutionMapper;
 import com.bowon.cpm.order.service.ExecutionSyncService;
@@ -17,6 +18,7 @@ public class ExecutionController {
 
     private final ExecutionSyncService executionSyncService;
     private final OrderExecutionMapper orderExecutionMapper;
+    private final TradingProperties tradingProperties;
 
     /**
      * 당일 체결 내역 동기화
@@ -37,9 +39,20 @@ public class ExecutionController {
     @GetMapping("/executions")
     public ApiResponse<List<OrderExecution>> getExecutions(
             @RequestParam String stockCode,
+            @RequestParam(required = false) String mode,
             @RequestParam(defaultValue = "20") int limit
     ) {
-        return ApiResponse.ok(orderExecutionMapper.findByStockCode(stockCode, limit));
+        return ApiResponse.ok(orderExecutionMapper.findByStockCode(stockCode, normalizeMode(mode), limit));
+    }
+
+    private String normalizeMode(String mode) {
+        String normalized = mode == null || mode.isBlank()
+                ? tradingProperties.normalizedMode()
+                : mode.trim().toUpperCase();
+        if ("REAL".equals(normalized)) {
+            return "KIS";
+        }
+        return normalized;
     }
 }
 

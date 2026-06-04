@@ -1,7 +1,11 @@
 package com.bowon.cpm.admin;
 
 import com.bowon.cpm.broker.dto.AccountBalanceResult;
+import com.bowon.cpm.broker.kis.KisProperties;
 import com.bowon.cpm.common.response.ApiResponse;
+import com.bowon.cpm.paper.domain.PaperAccountBalance;
+import com.bowon.cpm.paper.domain.PaperPortfolioPosition;
+import com.bowon.cpm.paper.service.PaperPortfolioService;
 import com.bowon.cpm.portfolio.domain.PortfolioPosition;
 import com.bowon.cpm.portfolio.service.PortfolioService;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +21,8 @@ import java.util.List;
 public class AccountController {
 
     private final PortfolioService portfolioService;
+    private final PaperPortfolioService paperPortfolioService;
+    private final KisProperties kisProperties;
 
     /**
      * 계좌 잔고 조회 + DB 저장
@@ -36,6 +42,18 @@ public class AccountController {
     public ApiResponse<List<PortfolioPosition>> getPositions() {
         List<PortfolioPosition> positions = portfolioService.getPositions();
         return ApiResponse.ok(positions);
+    }
+
+    @GetMapping("/paper/balance")
+    public ApiResponse<PaperAccountBalance> getPaperBalance() {
+        return paperPortfolioService.findLatestAccountBalance(kisProperties.accountNo())
+                .map(ApiResponse::ok)
+                .orElse(ApiResponse.error("PAPER account balance not initialized"));
+    }
+
+    @GetMapping("/paper/positions")
+    public ApiResponse<List<PaperPortfolioPosition>> getPaperPositions() {
+        return ApiResponse.ok(paperPortfolioService.findPositions(kisProperties.accountNo()));
     }
 }
 

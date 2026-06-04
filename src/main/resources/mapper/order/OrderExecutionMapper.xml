@@ -30,12 +30,16 @@
     <!-- 인덱스: idx_order_execution_stock_time -->
     <select id="findByStockCode"
             resultType="com.bowon.cpm.order.domain.OrderExecution">
-        SELECT id, order_request_id, broker_order_no, stock_code, order_side,
-               executed_quantity, executed_price, executed_amount,
-               commission, tax, executed_at, created_at
-        FROM order_execution
-        WHERE stock_code = #{stockCode}
-        ORDER BY executed_at DESC
+        SELECT oe.id, oe.order_request_id, oe.broker_order_no, oe.stock_code, oe.order_side,
+               oe.executed_quantity, oe.executed_price, oe.executed_amount,
+               oe.commission, oe.tax, oe.executed_at, oe.created_at
+        FROM order_execution oe
+        JOIN order_request req ON req.id = oe.order_request_id
+        WHERE oe.stock_code = #{stockCode}
+        <if test="mode != null and mode != '' and mode != 'ALL'">
+          AND req.broker_type = #{mode}
+        </if>
+        ORDER BY oe.executed_at DESC, oe.id DESC
         LIMIT #{limit}
     </select>
 

@@ -60,6 +60,7 @@ public class MarketDataService {
                     .accumulatedVolume(result.getAccumulatedVolume())
                     .tradingValue(result.getTradingValue())
                     .build());
+            upsertStockMasterIfNamePresent(stockCode, result.getStockName());
 
             log.info("[Market] 현재가 저장 완료: stockCode={}, price={}", stockCode, result.getCurrentPrice());
 
@@ -122,7 +123,7 @@ public class MarketDataService {
             }
 
             // stock_master upsert (종목명은 현재가 응답에서 가져오지 못하므로 코드만 저장)
-            stockService.upsertStockMaster(stockCode, stockCode, "KOSPI");
+            stockService.upsertStockMaster(stockCode, resolveStockName(stockCode), "KOSPI");
 
             success = true;
             log.info("[Market] 일봉 저장 완료: stockCode={}, count={}", stockCode, savedCount);
@@ -166,6 +167,31 @@ public class MarketDataService {
         } catch (Exception e) {
             log.warn("[BrokerApiLog] 로그 저장 실패: {}", e.getMessage());
         }
+    }
+
+    private void upsertStockMasterIfNamePresent(String stockCode, String stockName) {
+        if (hasUsableStockName(stockName, stockCode)) {
+            stockService.upsertStockMaster(stockCode, stockName, "KOSPI");
+        }
+    }
+
+    private String resolveStockName(String stockCode) {
+        try {
+            StockQuoteResult quote = brokerClient.getCurrentPrice(stockCode);
+            if (quote != null && hasUsableStockName(quote.getStockName(), stockCode)) {
+                return quote.getStockName();
+            }
+        } catch (Exception e) {
+            log.warn("[Market] stock name lookup failed: stockCode={}, error={}", stockCode, e.getMessage());
+        }
+        return stockService.findByStockCode(stockCode)
+                .map(stock -> stock.getStockName())
+                .filter(name -> hasUsableStockName(name, stockCode))
+                .orElse(stockCode);
+    }
+
+    private boolean hasUsableStockName(String stockName, String stockCode) {
+        return stockName != null && !stockName.isBlank() && !stockName.equals(stockCode);
     }
 
     private BigDecimal parseBigDecimal(String value) {

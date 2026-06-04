@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.paper.mapper.PaperPortfolioProfitLossMapper">
+
+    <insert id="upsert" parameterType="com.bowon.cpm.paper.domain.PaperPortfolioProfitLoss"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO paper_portfolio_profit_loss (
+            account_no, stock_code, base_date, evaluation_type,
+            start_asset_amount, end_asset_amount,
+            realized_profit_loss, unrealized_profit_loss,
+            return_rate, updated_at
+        ) VALUES (
+            #{accountNo}, #{stockCode}, #{baseDate}, #{evaluationType},
+            #{startAssetAmount}, #{endAssetAmount},
+            #{realizedProfitLoss}, #{unrealizedProfitLoss},
+            #{returnRate}, NOW()
+        )
+        ON DUPLICATE KEY UPDATE
+            end_asset_amount       = VALUES(end_asset_amount),
+            realized_profit_loss   = VALUES(realized_profit_loss),
+            unrealized_profit_loss = VALUES(unrealized_profit_loss),
+            return_rate            = VALUES(return_rate),
+            updated_at             = NOW()
+    </insert>
+
+    <select id="findRecentByAccountNo"
+            resultType="com.bowon.cpm.paper.domain.PaperPortfolioProfitLoss">
+        SELECT id, account_no, stock_code, base_date, evaluation_type,
+               start_asset_amount, end_asset_amount,
+               realized_profit_loss, unrealized_profit_loss,
+               return_rate, created_at, updated_at
+        FROM paper_portfolio_profit_loss
+        WHERE account_no = #{accountNo}
+        ORDER BY base_date DESC, updated_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>
