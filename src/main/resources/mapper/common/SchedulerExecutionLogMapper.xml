@@ -5,30 +5,32 @@
 
     <insert id="insert" parameterType="com.bowon.cpm.common.domain.SchedulerExecutionLog"
             useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO scheduler_execution_log (scheduler_name, status, execution_message, started_at)
+        INSERT INTO scheduler_execution_log (scheduler_name, execution_status, message, started_at)
         VALUES (#{schedulerName}, #{status}, #{executionMessage}, #{startedAt})
     </insert>
 
     <update id="updateFinished">
         UPDATE scheduler_execution_log
-        SET status = #{status},
-            execution_message = #{executionMessage},
-            finished_at = NOW()
+        SET execution_status = #{status},
+            message = #{executionMessage},
+            ended_at = NOW(),
+            duration_ms = TIMESTAMPDIFF(MICROSECOND, started_at, NOW()) DIV 1000
         WHERE id = #{id}
     </update>
 
     <select id="countRunning" resultType="int">
         SELECT COUNT(*) FROM scheduler_execution_log
-        WHERE scheduler_name = #{schedulerName} AND status = 'RUNNING'
+        WHERE scheduler_name = #{schedulerName} AND execution_status = 'RUNNING'
     </select>
 
     <update id="expireStaleRunning">
         UPDATE scheduler_execution_log
-        SET status = 'FAILED',
-            execution_message = #{executionMessage},
-            finished_at = NOW()
+        SET execution_status = 'FAILED',
+            message = #{executionMessage},
+            ended_at = NOW(),
+            duration_ms = TIMESTAMPDIFF(MICROSECOND, started_at, NOW()) DIV 1000
         WHERE scheduler_name = #{schedulerName}
-          AND status = 'RUNNING'
+          AND execution_status = 'RUNNING'
           AND started_at &lt; #{timeoutBefore}
     </update>
 

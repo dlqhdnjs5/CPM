@@ -29,8 +29,10 @@
         )
         ON DUPLICATE KEY UPDATE
             stock_name    = VALUES(stock_name),
-            sector_name   = VALUES(sector_name),
-            industry_name = VALUES(industry_name),
+            market_type   = COALESCE(VALUES(market_type), market_type),
+            sector_name   = COALESCE(VALUES(sector_name), sector_name),
+            industry_name = COALESCE(VALUES(industry_name), industry_name),
+            corp_code     = COALESCE(VALUES(corp_code), corp_code),
             is_active     = VALUES(is_active),
             updated_at    = CURRENT_TIMESTAMP
     </insert>

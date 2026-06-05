@@ -4,16 +4,20 @@ import com.bowon.cpm.dart.domain.DartCorpCode;
 import com.bowon.cpm.common.exception.ExternalApiException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.ByteArrayInputStream;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,10 +45,12 @@ import java.util.zip.ZipInputStream;
 @RequiredArgsConstructor
 public class DartCorpCodeClient {
 
-    private final WebClient dartWebClient;
+    private final DartProperties dartProperties;
 
-    @Value("${external.dart.api-key}")
-    private String apiKey;
+    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .version(HttpClient.Version.HTTP_1_1)
+            .build();
 
     /**
      * DART corp_code 전체 목록 다운로드 + 파싱
@@ -53,14 +59,7 @@ public class DartCorpCodeClient {
     public List<DartCorpCode> fetchCorpCodes() {
         log.info("[DART] corpCode.xml 다운로드 시작");
 
-        byte[] zipBytes = dartWebClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/api/corpCode.xml")
-                        .queryParam("crtfc_key", apiKey)
-                        .build())
-                .retrieve()
-                .bodyToMono(byte[].class)
-                .block();
+        byte[] zipBytes = downloadCorpCodeZip();
 
         if (zipBytes == null || zipBytes.length == 0) {
             throw new ExternalApiException("DART", "corpCode.xml 다운로드 실패: 응답 없음");
@@ -69,6 +68,35 @@ public class DartCorpCodeClient {
         List<DartCorpCode> result = parseZip(zipBytes);
         log.info("[DART] corpCode 파싱 완료: total={}", result.size());
         return result;
+    }
+
+    private byte[] downloadCorpCodeZip() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(corpCodeUri())
+                    .timeout(Duration.ofSeconds(30))
+                    .GET()
+                    .build();
+
+            HttpResponse<byte[]> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new ExternalApiException("DART",
+                        "corpCode.xml 다운로드 실패: status=" + response.statusCode());
+            }
+            return response.body();
+        } catch (ExternalApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ExternalApiException("DART", "corpCode.xml 다운로드 실패: " + e.getMessage());
+        }
+    }
+
+    private URI corpCodeUri() {
+        String baseUrl = dartProperties.baseUrl();
+        if (baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
+        }
+        String apiKey = URLEncoder.encode(dartProperties.apiKey(), StandardCharsets.UTF_8);
+        return URI.create(baseUrl + "/api/corpCode.xml?crtfc_key=" + apiKey);
     }
 
     private List<DartCorpCode> parseZip(byte[] zipBytes) {

@@ -15,6 +15,8 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class StockService {
 
+    private static final String UNKNOWN_MARKET_TYPE = "UNKNOWN";
+
     private final StockMasterMapper stockMasterMapper;
 
     /**
@@ -51,6 +53,21 @@ public class StockService {
 
         stockMasterMapper.upsert(stockMaster);
         log.debug("[Stock] stock_master upsert: stockCode={}, name={}", stockCode, stockName);
+    }
+
+    @Transactional
+    public void upsertStockMasterFromDart(String stockCode, String stockName, String corpCode) {
+        StockMaster stockMaster = StockMaster.builder()
+                .stockCode(stockCode)
+                .stockName(stockName)
+                .marketType(UNKNOWN_MARKET_TYPE)
+                .corpCode(corpCode)
+                .isActive(true)
+                .build();
+
+        stockMasterMapper.upsert(stockMaster);
+        log.debug("[Stock] stock_master DART upsert: stockCode={}, name={}, corpCode={}",
+                stockCode, stockName, corpCode);
     }
 }
 

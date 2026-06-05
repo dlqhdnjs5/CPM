@@ -4,6 +4,24 @@
 
 <mapper namespace="com.bowon.cpm.news.mapper.StockNewsMapper">
 
+    <resultMap id="StockNewsResultMap" type="com.bowon.cpm.news.domain.StockNews">
+        <id property="id" column="id"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="keyword" column="keyword"/>
+        <result property="title" column="title"/>
+        <result property="summary" column="summary"/>
+        <result property="originUrl" column="origin_url"/>
+        <result property="originUrlHash" column="origin_url_hash"/>
+        <result property="naverLink" column="naver_link"/>
+        <result property="publisher" column="publisher"/>
+        <result property="publishedAt" column="published_at"/>
+        <result property="collectedAt" column="collected_at"/>
+        <result property="aiSummary" column="ai_summary"/>
+        <result property="sentiment" column="sentiment"/>
+        <result property="sentimentScore" column="sentiment_score"/>
+        <result property="impactScore" column="impact_score"/>
+    </resultMap>
+
     <!-- INSERT IGNORE — UK: origin_url_hash (SHA-256) -->
     <insert id="insertIgnore" parameterType="com.bowon.cpm.news.domain.StockNews">
         INSERT IGNORE INTO stock_news (
@@ -18,8 +36,7 @@
     </insert>
 
     <!-- 인덱스: idx_stock_news_stock_published (stock_code, published_at) -->
-    <select id="findByStockCode"
-            resultType="com.bowon.cpm.news.domain.StockNews">
+    <select id="findByStockCode" resultMap="StockNewsResultMap">
         SELECT
             sn.id, sn.stock_code, sn.keyword, sn.title,
             COALESCE(nas.summary, sn.summary) AS summary,
@@ -36,8 +53,7 @@
     </select>
 
     <!-- 종목 + 발행일(since 이후) 필터 - AI 판단 프롬프트용 (인덱스: stock_code, published_at) -->
-    <select id="findByStockCodeAndPublishedAfter"
-            resultType="com.bowon.cpm.news.domain.StockNews">
+    <select id="findByStockCodeAndPublishedAfter" resultMap="StockNewsResultMap">
         SELECT
             sn.id, sn.stock_code, sn.keyword, sn.title,
             COALESCE(nas.summary, sn.summary) AS summary,
@@ -55,8 +71,7 @@
         LIMIT #{limit}
     </select>
 
-    <select id="findPendingAnalysisTargets"
-            resultType="com.bowon.cpm.news.domain.StockNews">
+    <select id="findPendingAnalysisTargets" resultMap="StockNewsResultMap">
         SELECT
             sn.id, sn.stock_code, sn.keyword, sn.title, sn.summary,
             sn.origin_url, sn.origin_url_hash,

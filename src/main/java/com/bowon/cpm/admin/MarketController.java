@@ -1,6 +1,7 @@
 package com.bowon.cpm.admin;
 
 import com.bowon.cpm.broker.dto.StockQuoteResult;
+import com.bowon.cpm.admin.service.StockDataBootstrapService;
 import com.bowon.cpm.common.response.ApiResponse;
 import com.bowon.cpm.market.domain.StockIndicatorDaily;
 import com.bowon.cpm.market.domain.StockPriceDaily;
@@ -21,6 +22,7 @@ public class MarketController {
 
     private final MarketDataService marketDataService;
     private final TechnicalIndicatorService technicalIndicatorService;
+    private final StockDataBootstrapService stockDataBootstrapService;
 
     /**
      * 종목 현재가 조회 + stock_realtime_quote 저장
@@ -30,6 +32,22 @@ public class MarketController {
     public ApiResponse<StockQuoteResult> getCurrentPrice(@PathVariable String stockCode) {
         StockQuoteResult result = marketDataService.fetchAndSaveCurrentPrice(stockCode);
         return ApiResponse.ok(result);
+    }
+
+    @PostMapping("/{stockCode}/ai-data/bootstrap")
+    public ApiResponse<StockDataBootstrapService.BootstrapResult> bootstrapAiData(
+            @PathVariable String stockCode,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "30") int newsDisplay,
+            @RequestParam(defaultValue = "50") int newsAnalyzeLimit
+    ) {
+        StockDataBootstrapService.BootstrapResult result = stockDataBootstrapService.bootstrap(
+                stockCode, from, to, keyword, newsDisplay, newsAnalyzeLimit);
+        return ApiResponse.ok("AI data bootstrap completed", result);
     }
 
     /**

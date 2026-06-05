@@ -1,12 +1,15 @@
 package com.bowon.cpm.admin;
 
 import com.bowon.cpm.common.response.ApiResponse;
+import com.bowon.cpm.dart.domain.DartCorpCode;
 import com.bowon.cpm.dart.domain.DartDisclosure;
 import com.bowon.cpm.dart.domain.DartFinancialStatement;
 import com.bowon.cpm.dart.domain.DartMajorEvent;
+import com.bowon.cpm.dart.mapper.DartCorpCodeMapper;
 import com.bowon.cpm.dart.service.DartFinancialService;
 import com.bowon.cpm.dart.service.DartMajorEventService;
 import com.bowon.cpm.dart.service.DartService;
+import com.bowon.cpm.stock.service.StockService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +26,8 @@ public class DartController {
     private final DartService dartService;
     private final DartFinancialService dartFinancialService;
     private final DartMajorEventService dartMajorEventService;
+    private final DartCorpCodeMapper dartCorpCodeMapper;
+    private final StockService stockService;
 
     /**
      * DART corp_code 전체 동기화
@@ -38,6 +43,46 @@ public class DartController {
      * 종목 공시 수집
      * POST /api/dart/{stockCode}/disclosures/fetch?from=2026-01-01&to=2026-05-31
      */
+    /**
+     * stock_master 등록/갱신 + DART 공시/이벤트/재무 일괄 수집
+     * POST /api/dart/{stockCode}/bootstrap?from=2026-03-01&to=2026-06-05
+     */
+    @PostMapping("/dart/{stockCode}/bootstrap")
+    public ApiResponse<Map<String, Object>> bootstrapStockDartData(
+            @PathVariable String stockCode,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+    ) {
+        LocalDate resolvedFrom = from != null ? from : LocalDate.now().minusMonths(3);
+        LocalDate resolvedTo = to != null ? to : LocalDate.now();
+
+        DartCorpCode corpCode = dartCorpCodeMapper.findByStockCode(stockCode)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "corp_code 없음: stockCode=" + stockCode + ", 먼저 /api/dart/corp-codes/sync 실행 필요"));
+
+        String stockName = corpCode.getCorpName() != null && !corpCode.getCorpName().isBlank()
+                ? corpCode.getCorpName()
+                : stockCode;
+        stockService.upsertStockMasterFromDart(stockCode, stockName, corpCode.getCorpCode());
+
+        int disclosureCount = dartService.fetchDisclosures(stockCode, resolvedFrom, resolvedTo);
+        int eventCount = dartMajorEventService.classifyAndSave(stockCode);
+        int financialCount = dartFinancialService.fetchAndSave(stockCode);
+
+        return ApiResponse.ok("DART 데이터 일괄 수집 완료", Map.of(
+                "stockCode", stockCode,
+                "stockName", stockName,
+                "corpCode", corpCode.getCorpCode(),
+                "from", resolvedFrom,
+                "to", resolvedTo,
+                "disclosureCount", disclosureCount,
+                "eventCount", eventCount,
+                "financialCount", financialCount
+        ));
+    }
+
     @PostMapping("/dart/{stockCode}/disclosures/fetch")
     public ApiResponse<Map<String, Object>> fetchDisclosures(
             @PathVariable String stockCode,
