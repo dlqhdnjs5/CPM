@@ -83,13 +83,7 @@ public class FeedbackService {
         BigDecimal basePrice = decision.getCurrentPrice();
 
         // 3. 수익률 계산
-        BigDecimal returnRate = null;
-        if (basePrice != null && basePrice.compareTo(BigDecimal.ZERO) > 0 && currentPrice != null) {
-            returnRate = currentPrice.subtract(basePrice)
-                    .divide(basePrice, 6, RoundingMode.HALF_UP)
-                    .multiply(new BigDecimal("100"))
-                    .setScale(4, RoundingMode.HALF_UP);
-        }
+        BigDecimal returnRate = calculateDecisionReturnRate(decision, basePrice, currentPrice);
 
         // 4. 목표가/손절가 도달 여부 (BUY 기준)
         Boolean targetReached = null;
@@ -113,12 +107,7 @@ public class FeedbackService {
         }
 
         // 5. 판단 성공 여부 (목표가 도달 O + 손절가 도달 X)
-        Boolean success = null;
-        if (targetReached != null && stopLossReached != null) {
-            success = targetReached && !stopLossReached;
-        } else if (targetReached != null) {
-            success = targetReached;
-        }
+        Boolean success = evaluateDirectionalSuccess(decision, basePrice, currentPrice, stopLossReached, targetReached);
 
         // 6. 피드백 요약 생성
         String feedbackSummary = buildFeedbackSummary(decision, currentPrice, returnRate, targetReached, stopLossReached, success);
@@ -302,13 +291,7 @@ public class FeedbackService {
 
         BigDecimal evaluatedPrice = lastClose != null ? lastClose : basePrice;
 
-        BigDecimal returnRate = null;
-        if (basePrice != null && basePrice.compareTo(BigDecimal.ZERO) > 0 && evaluatedPrice != null) {
-            returnRate = evaluatedPrice.subtract(basePrice)
-                    .divide(basePrice, 6, RoundingMode.HALF_UP)
-                    .multiply(new BigDecimal("100"))
-                    .setScale(4, RoundingMode.HALF_UP);
-        }
+        BigDecimal returnRate = calculateDecisionReturnRate(decision, basePrice, evaluatedPrice);
 
         Boolean targetReached = null;
         Boolean stopLossReached = null;
@@ -328,12 +311,7 @@ public class FeedbackService {
             }
         }
 
-        Boolean success = null;
-        if (targetReached != null && stopLossReached != null) {
-            success = targetReached && !stopLossReached;
-        } else if (targetReached != null) {
-            success = targetReached;
-        }
+        Boolean success = evaluateDirectionalSuccess(decision, basePrice, evaluatedPrice, stopLossReached, targetReached);
 
         String summary = buildHoldingEndSummary(decision, returnRate, highest, lowest,
                 targetReached, stopLossReached, success);
@@ -375,6 +353,44 @@ public class FeedbackService {
         if (Boolean.TRUE.equals(success)) sb.append(" → 성공");
         else if (Boolean.FALSE.equals(success)) sb.append(" → 실패");
         return sb.toString();
+    }
+
+    private BigDecimal calculateDecisionReturnRate(
+            AiDecision decision,
+            BigDecimal basePrice,
+            BigDecimal evaluatedPrice
+    ) {
+        if (basePrice == null || basePrice.compareTo(BigDecimal.ZERO) <= 0 || evaluatedPrice == null) {
+            return null;
+        }
+        BigDecimal numerator = "SELL".equals(decision.getDecision())
+                ? basePrice.subtract(evaluatedPrice)
+                : evaluatedPrice.subtract(basePrice);
+        return numerator
+                .divide(basePrice, 6, RoundingMode.HALF_UP)
+                .multiply(new BigDecimal("100"))
+                .setScale(4, RoundingMode.HALF_UP);
+    }
+
+    private Boolean evaluateDirectionalSuccess(
+            AiDecision decision,
+            BigDecimal basePrice,
+            BigDecimal evaluatedPrice,
+            Boolean stopLossReached,
+            Boolean targetReached
+    ) {
+        if (Boolean.TRUE.equals(stopLossReached)) {
+            return false;
+        }
+        if (basePrice != null && evaluatedPrice != null) {
+            if ("BUY".equals(decision.getDecision())) {
+                return evaluatedPrice.compareTo(basePrice) > 0;
+            }
+            if ("SELL".equals(decision.getDecision())) {
+                return evaluatedPrice.compareTo(basePrice) < 0;
+            }
+        }
+        return targetReached;
     }
 
     private BigDecimal toBigDecimal(Object o) {
