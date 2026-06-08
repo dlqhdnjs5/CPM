@@ -39,6 +39,18 @@ public class TechnicalIndicatorService {
     }
 
     @Transactional
+    public int calculateAllWatched() {
+        int saved = 0;
+        for (StockMaster stock : stockMasterMapper.findAllWatched()) {
+            if (calculateForStock(stock.getStockCode()) != null) {
+                saved++;
+            }
+        }
+        log.info("[Indicator] watched stock indicator calculation completed: saved={}", saved);
+        return saved;
+    }
+
+    @Transactional
     public StockIndicatorDaily calculateForStock(String stockCode) {
         List<StockPriceDaily> prices = stockPriceDailyMapper.findByStockCodeAndDateRange(
                 stockCode,

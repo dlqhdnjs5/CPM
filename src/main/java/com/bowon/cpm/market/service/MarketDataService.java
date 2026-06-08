@@ -36,6 +36,7 @@ public class MarketDataService {
     private final StockService stockService;
 
     private static final DateTimeFormatter KIS_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final String UNKNOWN_MARKET_TYPE = "UNKNOWN";
 
     /**
      * 현재가 조회 후 stock_realtime_quote 저장
@@ -123,7 +124,7 @@ public class MarketDataService {
             }
 
             // stock_master upsert (종목명은 현재가 응답에서 가져오지 못하므로 코드만 저장)
-            stockService.upsertStockMaster(stockCode, resolveStockName(stockCode), "KOSPI");
+            stockService.upsertStockMaster(stockCode, resolveStockName(stockCode), UNKNOWN_MARKET_TYPE);
 
             success = true;
             log.info("[Market] 일봉 저장 완료: stockCode={}, count={}", stockCode, savedCount);
@@ -171,7 +172,7 @@ public class MarketDataService {
 
     private void upsertStockMasterIfNamePresent(String stockCode, String stockName) {
         if (hasUsableStockName(stockName, stockCode)) {
-            stockService.upsertStockMaster(stockCode, stockName, "KOSPI");
+            stockService.upsertStockMaster(stockCode, stockName, UNKNOWN_MARKET_TYPE);
         }
     }
 

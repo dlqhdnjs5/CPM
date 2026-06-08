@@ -2,6 +2,7 @@ package com.bowon.cpm.dart.client;
 
 import com.bowon.cpm.common.exception.ExternalApiException;
 import com.bowon.cpm.dart.client.dto.DartFinancialResponse;
+import com.bowon.cpm.dart.client.dto.DartStockQuantityResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,9 +62,51 @@ public class DartFinancialClient {
         }
     }
 
+    public DartStockQuantityResponse getStockTotalQuantity(
+            String corpCode, int businessYear, String reportCode) {
+
+        log.debug("[DART] stock total quantity: corpCode={}, year={}, report={}",
+                corpCode, businessYear, reportCode);
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder(stockTotalQuantityUri(corpCode, businessYear, reportCode))
+                    .timeout(Duration.ofSeconds(30))
+                    .GET()
+                    .build();
+            HttpResponse<String> httpResponse = HTTP_CLIENT.send(
+                    request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+            if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
+                throw new ExternalApiException("DART",
+                        "Stock total quantity HTTP failed: status=" + httpResponse.statusCode());
+            }
+
+            DartStockQuantityResponse response = objectMapper.readValue(
+                    httpResponse.body(), DartStockQuantityResponse.class);
+            if (response == null) {
+                throw new ExternalApiException("DART", "Stock total quantity response empty: corpCode=" + corpCode);
+            }
+            return response;
+
+        } catch (ExternalApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new ExternalApiException("DART", "Stock total quantity request failed: " + e.getMessage());
+        }
+    }
+
     private URI financialStatementUri(String corpCode, int businessYear, String reportCode) {
         String baseUrl = normalizedBaseUrl();
         return URI.create(baseUrl + "/api/fnlttSinglAcnt.json"
+                + "?crtfc_key=" + encode(dartProperties.apiKey())
+                + "&corp_code=" + encode(corpCode)
+                + "&bsns_year=" + businessYear
+                + "&reprt_code=" + encode(reportCode));
+    }
+
+    private URI stockTotalQuantityUri(String corpCode, int businessYear, String reportCode) {
+        String baseUrl = normalizedBaseUrl();
+        return URI.create(baseUrl + "/api/stockTotqySttus.json"
                 + "?crtfc_key=" + encode(dartProperties.apiKey())
                 + "&corp_code=" + encode(corpCode)
                 + "&bsns_year=" + businessYear

@@ -59,6 +59,25 @@
         ORDER BY trade_date DESC
     </select>
 
+    <select id="findLatestByStockCode"
+            resultType="com.bowon.cpm.market.domain.StockPriceDaily">
+        SELECT
+            id,
+            stock_code,
+            trade_date,
+            open_price,
+            high_price,
+            low_price,
+            close_price,
+            volume,
+            trading_value,
+            source
+        FROM stock_price_daily
+        WHERE stock_code = #{stockCode}
+        ORDER BY trade_date DESC
+        LIMIT 1
+    </select>
+
     <!--
         기간 내 최고가/최저가/마지막 종가 집계
         - high: 기간 중 최고가

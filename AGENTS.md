@@ -30,7 +30,7 @@
 
 ## 도메인 구조 (DB 기준)
 1. **종목/시장 데이터** - stock_master, stock_price_daily, stock_price_minute, stock_realtime_quote, stock_orderbook, stock_indicator_daily, stock_indicator_minute, market_index
-2. **OpenDART 데이터** - dart_corp_code, dart_company_overview, dart_disclosure, dart_financial_statement, dart_financial_account, dart_major_event
+2. **OpenDART 데이터** - dart_corp_code, dart_company_overview, dart_disclosure, dart_financial_statement, dart_financial_account, dart_stock_quantity, dart_major_event
 3. **뉴스 데이터** - news_keyword, stock_news, news_ai_summary, news_sentiment
 4. **AI 판단 데이터** - ai_prompt_log, ai_decision_raw_response, ai_decision, ai_decision_factor, ai_feedback
 5. **계좌/포트폴리오** - account_balance, portfolio_position, portfolio_snapshot, portfolio_profit_loss, portfolio_realized_profit_loss, paper_account_balance, paper_portfolio_position, paper_portfolio_profit_loss
@@ -42,6 +42,16 @@ PAPER mode ledger rule:
 - PAPER virtual account, position, and daily P/L state must use `paper_account_balance`, `paper_portfolio_position`, and `paper_portfolio_profit_loss`.
 - REAL/KIS synced account, position, and daily P/L state must continue to use `account_balance`, `portfolio_position`, and `portfolio_profit_loss`.
 - `risk_check_result.trading_mode` must be written on every risk check. Orders must only accept a passed risk check from the current trading mode.
+
+Watchlist discovery rule:
+- `stock_master.is_active` means the stock is listed/usable.
+- `stock_master.is_watched` means the stock is in the active monitoring target set for data collection and AI decision generation.
+- `stock_candidate_score` stores daily deterministic candidate scores and AI/fallback selection status.
+- `stock_fundamental_indicator` stores calculated ROE, debt ratio, margins, growth rates, PER, PBR, PSR, and fundamental score.
+- Default watchlist limits are max watched stocks 20, max daily additions 5, and AI review candidates 30.
+- Default candidate prefetch limit is 30. Prefetch runs before scoring and fills minimal price/indicator/news/DART/financial data.
+- Candidate prefetch also collects DART stock quantity and calculates fundamental indicators when financial statement and price data are available.
+- Held stocks must stay watched; non-held watched stocks may be turned off when the max watched limit is exceeded.
 
 ## 개발 설계
 
@@ -439,6 +449,7 @@ dart_company_overview
 dart_disclosure
 dart_financial_statement
 dart_financial_account
+dart_stock_quantity
 dart_major_event
 ```
 
@@ -1202,12 +1213,14 @@ stock_orderbook
 stock_indicator_daily
 stock_indicator_minute
 market_index
+stock_fundamental_indicator
 
 dart_corp_code
 dart_company_overview
 dart_disclosure
 dart_financial_statement
 dart_financial_account
+dart_stock_quantity
 dart_major_event
 
 news_keyword

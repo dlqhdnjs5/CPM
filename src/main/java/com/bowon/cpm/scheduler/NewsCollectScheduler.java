@@ -35,7 +35,7 @@ public class NewsCollectScheduler {
         if (!logSupport.isWeekday() || logSupport.isAlreadyRunning(NAME)) return;
         Long logId = logSupport.start(NAME);
         try {
-            List<StockMaster> stocks = stockMasterMapper.findAllActive();
+            List<StockMaster> stocks = stockMasterMapper.findAllWatched();
             int count = 0;
             for (StockMaster stock : stocks) {
                 try {

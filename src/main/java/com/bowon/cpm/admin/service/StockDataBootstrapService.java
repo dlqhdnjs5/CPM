@@ -6,6 +6,7 @@ import com.bowon.cpm.dart.mapper.DartCorpCodeMapper;
 import com.bowon.cpm.dart.service.DartFinancialService;
 import com.bowon.cpm.dart.service.DartMajorEventService;
 import com.bowon.cpm.dart.service.DartService;
+import com.bowon.cpm.fundamental.service.FundamentalIndicatorService;
 import com.bowon.cpm.market.domain.StockIndicatorDaily;
 import com.bowon.cpm.market.service.MarketDataService;
 import com.bowon.cpm.market.service.TechnicalIndicatorService;
@@ -33,6 +34,7 @@ public class StockDataBootstrapService {
     private final NewsAnalysisService newsAnalysisService;
     private final MarketDataService marketDataService;
     private final TechnicalIndicatorService technicalIndicatorService;
+    private final FundamentalIndicatorService fundamentalIndicatorService;
 
     public BootstrapResult bootstrap(String inputCode, LocalDate from, LocalDate to, String keyword, int newsDisplay, int newsAnalyzeLimit) {
         LocalDate resolvedFrom = from != null ? from : LocalDate.now().minusMonths(3);
@@ -55,6 +57,7 @@ public class StockDataBootstrapService {
         steps.add(run("dartDisclosuresFetch", () -> dartService.fetchDisclosures(resolvedStockCode, resolvedFrom, resolvedTo)));
         steps.add(run("dartMajorEventsClassify", () -> dartMajorEventService.classifyAndSave(resolvedStockCode)));
         steps.add(run("dartFinancialsFetch", () -> dartFinancialService.fetchAndSave(resolvedStockCode)));
+        steps.add(run("dartStockQuantityFetch", () -> dartFinancialService.fetchAndSaveStockQuantity(resolvedStockCode)));
         steps.add(run("newsFetch", () -> newsCollectService.collectNews(resolvedStockCode, resolvedKeyword, newsDisplay)));
         steps.add(run("newsAnalyze", () -> {
             NewsAnalysisService.AnalysisBatchResult result = newsAnalysisService.analyzePending(newsAnalyzeLimit);
@@ -69,6 +72,8 @@ public class StockDataBootstrapService {
             StockIndicatorDaily indicator = technicalIndicatorService.calculateForStock(resolvedStockCode);
             return indicator != null ? 1 : 0;
         }));
+        steps.add(run("fundamentalIndicatorsCalculate", () ->
+                fundamentalIndicatorService.calculateAndSave(resolvedStockCode) != null ? 1 : 0));
 
         boolean allSucceeded = steps.stream().allMatch(BootstrapStep::success);
         return new BootstrapResult(

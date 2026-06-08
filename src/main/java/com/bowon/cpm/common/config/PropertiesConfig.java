@@ -13,7 +13,8 @@ import org.springframework.context.annotation.Configuration;
         DartProperties.class,
         NaverProperties.class,
         OpenAiProperties.class,
-        TradingProperties.class
+        TradingProperties.class,
+        WatchlistProperties.class
 })
 public class PropertiesConfig {
 }

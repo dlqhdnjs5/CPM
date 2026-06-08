@@ -42,6 +42,12 @@ cpm:
   trading:
     mode: ${TRADING_MODE:PAPER}
     enabled: ${TRADING_ENABLED:false}
+  watchlist:
+    max-watched-stocks: ${WATCHLIST_MAX_WATCHED_STOCKS:20}
+    max-daily-additions: ${WATCHLIST_MAX_DAILY_ADDITIONS:5}
+    ai-candidate-limit: ${WATCHLIST_AI_CANDIDATE_LIMIT:30}
+    source-candidate-limit: ${WATCHLIST_SOURCE_CANDIDATE_LIMIT:500}
+    prefetch-candidate-limit: ${WATCHLIST_PREFETCH_CANDIDATE_LIMIT:30}
 
 # 외부 API 설정
 external:

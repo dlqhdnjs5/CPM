@@ -19,6 +19,12 @@ cpm:
   trading:
     mode: PAPER
     enabled: false
+n  watchlist:
+    max-watched-stocks: 20
+    max-daily-additions: 5
+    ai-candidate-limit: 30
+    source-candidate-limit: 500
+    prefetch-candidate-limit: 30
 
 external:
   kis:

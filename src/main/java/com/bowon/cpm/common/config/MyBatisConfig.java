@@ -23,7 +23,9 @@ import org.springframework.context.annotation.Configuration;
         "com.bowon.cpm.portfolio.mapper",
         "com.bowon.cpm.paper.mapper",
         "com.bowon.cpm.feedback.mapper",
-        "com.bowon.cpm.broker.mapper"
+        "com.bowon.cpm.broker.mapper",
+        "com.bowon.cpm.watchlist.mapper",
+        "com.bowon.cpm.fundamental.mapper"
 })
 public class MyBatisConfig {
 }

@@ -42,7 +42,7 @@ public class AiDecisionScheduler {
         if (!logSupport.isMarketOpen() || logSupport.isAlreadyRunning(NAME)) return;
         Long logId = logSupport.start(NAME);
         try {
-            List<StockMaster> stocks = stockMasterMapper.findAllActive();
+            List<StockMaster> stocks = stockMasterMapper.findAllWatched();
             int buyCount = 0, holdCount = 0, failCount = 0;
             for (StockMaster stock : stocks) {
                 try {

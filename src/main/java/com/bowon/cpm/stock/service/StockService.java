@@ -35,6 +35,11 @@ public class StockService {
         return stockMasterMapper.findAllActive();
     }
 
+    @Transactional(readOnly = true)
+    public List<StockMaster> findAllWatched() {
+        return stockMasterMapper.findAllWatched();
+    }
+
     /**
      * 종목 정보 저장/갱신 (없으면 INSERT, 있으면 UPDATE)
      *
@@ -49,6 +54,7 @@ public class StockService {
                 .stockName(stockName)
                 .marketType(marketType)
                 .isActive(true)
+                .isWatched(false)
                 .build();
 
         stockMasterMapper.upsert(stockMaster);
@@ -63,11 +69,17 @@ public class StockService {
                 .marketType(UNKNOWN_MARKET_TYPE)
                 .corpCode(corpCode)
                 .isActive(true)
+                .isWatched(false)
                 .build();
 
         stockMasterMapper.upsert(stockMaster);
         log.debug("[Stock] stock_master DART upsert: stockCode={}, name={}, corpCode={}",
                 stockCode, stockName, corpCode);
+    }
+
+    @Transactional
+    public void updateWatched(String stockCode, boolean isWatched) {
+        stockMasterMapper.updateWatched(stockCode, isWatched);
     }
 }
 

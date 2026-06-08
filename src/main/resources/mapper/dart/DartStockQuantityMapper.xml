@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.dart.mapper.DartStockQuantityMapper">
+
+    <insert id="upsert" parameterType="com.bowon.cpm.dart.domain.DartStockQuantity"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO dart_stock_quantity (
+            corp_code,
+            stock_code,
+            business_year,
+            report_code,
+            stock_type,
+            issued_stock_quantity,
+            treasury_stock_quantity,
+            distributed_stock_quantity,
+            settlement_date,
+            raw_json
+        ) VALUES (
+            #{corpCode},
+            #{stockCode},
+            #{businessYear},
+            #{reportCode},
+            #{stockType},
+            #{issuedStockQuantity},
+            #{treasuryStockQuantity},
+            #{distributedStockQuantity},
+            #{settlementDate},
+            #{rawJson}
+        )
+        ON DUPLICATE KEY UPDATE
+            corp_code = VALUES(corp_code),
+            issued_stock_quantity = VALUES(issued_stock_quantity),
+            treasury_stock_quantity = VALUES(treasury_stock_quantity),
+            distributed_stock_quantity = VALUES(distributed_stock_quantity),
+            settlement_date = VALUES(settlement_date),
+            raw_json = VALUES(raw_json),
+            updated_at = CURRENT_TIMESTAMP
+    </insert>
+
+    <select id="findLatestByStockCode"
+            resultType="com.bowon.cpm.dart.domain.DartStockQuantity">
+        SELECT
+            id,
+            corp_code,
+            stock_code,
+            business_year,
+            report_code,
+            stock_type,
+            issued_stock_quantity,
+            treasury_stock_quantity,
+            distributed_stock_quantity,
+            settlement_date,
+            raw_json,
+            created_at,
+            updated_at
+        FROM dart_stock_quantity
+        WHERE stock_code = #{stockCode}
+        ORDER BY
+            business_year DESC,
+            report_code DESC,
+            CASE
+                WHEN LOWER(stock_type) = 'common' THEN 0
+                WHEN stock_type LIKE '%보통%' THEN 0
+                WHEN stock_type LIKE '%합계%' THEN 1
+                ELSE 2
+            END ASC,
+            COALESCE(distributed_stock_quantity, issued_stock_quantity, 0) DESC,
+            id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findByStockCode"
+            resultType="com.bowon.cpm.dart.domain.DartStockQuantity">
+        SELECT
+            id,
+            corp_code,
+            stock_code,
+            business_year,
+            report_code,
+            stock_type,
+            issued_stock_quantity,
+            treasury_stock_quantity,
+            distributed_stock_quantity,
+            settlement_date,
+            raw_json,
+            created_at,
+            updated_at
+        FROM dart_stock_quantity
+        WHERE stock_code = #{stockCode}
+        ORDER BY business_year DESC, report_code DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>

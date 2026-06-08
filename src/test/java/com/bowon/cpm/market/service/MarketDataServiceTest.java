@@ -70,6 +70,6 @@ class MarketDataServiceTest {
 
         service.fetchAndSaveDailyPrices("005930");
 
-        verify(stockService).upsertStockMaster("005930", "Samsung Electronics", "KOSPI");
+        verify(stockService).upsertStockMaster("005930", "Samsung Electronics", "UNKNOWN");
     }
 }

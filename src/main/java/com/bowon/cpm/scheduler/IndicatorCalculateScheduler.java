@@ -32,7 +32,7 @@ public class IndicatorCalculateScheduler {
         }
         Long logId = logSupport.start(NAME);
         try {
-            int saved = technicalIndicatorService.calculateAllActive();
+            int saved = technicalIndicatorService.calculateAllWatched();
             logSupport.success(logId, "indicator saved=" + saved);
         } catch (Exception e) {
             log.error("[{}] failed: {}", NAME, e.getMessage());

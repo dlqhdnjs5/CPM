@@ -1,7 +1,9 @@
 package com.bowon.cpm.scheduler;
 
-import com.bowon.cpm.dart.service.DartService;
+import com.bowon.cpm.dart.service.DartFinancialService;
 import com.bowon.cpm.dart.service.DartMajorEventService;
+import com.bowon.cpm.dart.service.DartService;
+import com.bowon.cpm.fundamental.service.FundamentalIndicatorService;
 import com.bowon.cpm.stock.domain.StockMaster;
 import com.bowon.cpm.stock.mapper.StockMasterMapper;
 import lombok.RequiredArgsConstructor;
@@ -12,53 +14,82 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * DART 공시/재무/이벤트 수집 스케줄러
- * - 08:45 장 시작 전: 전날 밤 공시 반영
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class DartCollectScheduler {
 
     private static final String NAME = "DartCollectScheduler";
+
     private final SchedulerLogSupport logSupport;
     private final DartService dartService;
+    private final DartFinancialService dartFinancialService;
     private final DartMajorEventService dartMajorEventService;
+    private final FundamentalIndicatorService fundamentalIndicatorService;
     private final StockMasterMapper stockMasterMapper;
 
     @Scheduled(cron = "0 45 8 * * MON-FRI")
     public void run() {
-        if (!logSupport.isWeekday() || logSupport.isAlreadyRunning(NAME)) return;
+        if (!logSupport.isWeekday() || logSupport.isAlreadyRunning(NAME)) {
+            return;
+        }
+
         Long logId = logSupport.start(NAME);
         try {
-            List<StockMaster> stocks = stockMasterMapper.findAllActive();
+            List<StockMaster> stocks = stockMasterMapper.findAllWatched();
             int disclosureCount = 0;
             int eventCount = 0;
+            int financialCount = 0;
+            int stockQuantityCount = 0;
+            int fundamentalCount = 0;
+
             for (StockMaster stock : stocks) {
+                String stockCode = stock.getStockCode();
+
                 try {
-                    dartService.fetchDisclosures(stock.getStockCode(),
-                            LocalDate.now().minusDays(7), LocalDate.now());
+                    dartService.fetchDisclosures(stockCode, LocalDate.now().minusDays(7), LocalDate.now());
                     disclosureCount++;
                 } catch (Exception e) {
-                    log.warn("[{}] {} 공시 수집 실패: {}", NAME, stock.getStockCode(), e.getMessage());
+                    log.warn("[{}] disclosure fetch failed: stockCode={}, error={}", NAME, stockCode, e.getMessage());
                 }
+
                 try {
-                    dartMajorEventService.classifyAndSave(stock.getStockCode());
+                    dartMajorEventService.classifyAndSave(stockCode);
                     eventCount++;
                 } catch (Exception e) {
-                    log.warn("[{}] {} 이벤트 분류 실패: {}", NAME, stock.getStockCode(), e.getMessage());
+                    log.warn("[{}] major event classify failed: stockCode={}, error={}", NAME, stockCode, e.getMessage());
+                }
+
+                try {
+                    dartFinancialService.fetchAndSave(stockCode);
+                    financialCount++;
+                } catch (Exception e) {
+                    log.warn("[{}] financial fetch failed: stockCode={}, error={}", NAME, stockCode, e.getMessage());
+                }
+
+                try {
+                    dartFinancialService.fetchAndSaveStockQuantity(stockCode);
+                    stockQuantityCount++;
+                } catch (Exception e) {
+                    log.warn("[{}] stock quantity fetch failed: stockCode={}, error={}", NAME, stockCode, e.getMessage());
+                }
+
+                try {
+                    fundamentalIndicatorService.calculateAndSave(stockCode);
+                    fundamentalCount++;
+                } catch (Exception e) {
+                    log.warn("[{}] fundamental calculate failed: stockCode={}, error={}", NAME, stockCode, e.getMessage());
                 }
             }
-            logSupport.success(logId, "공시:" + disclosureCount + "종목, 이벤트:" + eventCount + "종목");
+
+            logSupport.success(logId, "disclosures=" + disclosureCount
+                    + ", events=" + eventCount
+                    + ", financials=" + financialCount
+                    + ", stockQuantities=" + stockQuantityCount
+                    + ", fundamentals=" + fundamentalCount);
         } catch (Exception e) {
-            log.error("[{}] 실패: {}", NAME, e.getMessage());
+            log.error("[{}] failed: {}", NAME, e.getMessage());
             logSupport.fail(logId, e.getMessage());
         }
     }
 }
-
-
-
-
-

@@ -6,6 +6,8 @@ import com.bowon.cpm.dart.mapper.DartCorpCodeMapper;
 import com.bowon.cpm.dart.service.DartFinancialService;
 import com.bowon.cpm.dart.service.DartMajorEventService;
 import com.bowon.cpm.dart.service.DartService;
+import com.bowon.cpm.fundamental.domain.StockFundamentalIndicator;
+import com.bowon.cpm.fundamental.service.FundamentalIndicatorService;
 import com.bowon.cpm.market.domain.StockIndicatorDaily;
 import com.bowon.cpm.market.service.MarketDataService;
 import com.bowon.cpm.market.service.TechnicalIndicatorService;
@@ -39,6 +41,7 @@ class StockDataBootstrapServiceTest {
     @Mock NewsAnalysisService newsAnalysisService;
     @Mock MarketDataService marketDataService;
     @Mock TechnicalIndicatorService technicalIndicatorService;
+    @Mock FundamentalIndicatorService fundamentalIndicatorService;
 
     StockDataBootstrapService service;
 
@@ -53,7 +56,8 @@ class StockDataBootstrapServiceTest {
                 newsCollectService,
                 newsAnalysisService,
                 marketDataService,
-                technicalIndicatorService
+                technicalIndicatorService,
+                fundamentalIndicatorService
         );
     }
 
@@ -66,6 +70,7 @@ class StockDataBootstrapServiceTest {
         when(dartService.fetchDisclosures("042700", from, to)).thenReturn(22);
         when(dartMajorEventService.classifyAndSave("042700")).thenReturn(1);
         when(dartFinancialService.fetchAndSave("042700")).thenReturn(10);
+        when(dartFinancialService.fetchAndSaveStockQuantity("042700")).thenReturn(2);
         when(newsCollectService.collectNews("042700", "한미반도체", 30)).thenReturn(30);
         when(newsAnalysisService.analyzePending(50)).thenReturn(new NewsAnalysisService.AnalysisBatchResult(30, 30, 0));
         when(marketDataService.fetchAndSaveCurrentPrice("042700")).thenReturn(StockQuoteResult.builder()
@@ -77,13 +82,15 @@ class StockDataBootstrapServiceTest {
                 .stockCode("042700")
                 .tradeDate(to)
                 .build());
+        when(fundamentalIndicatorService.calculateAndSave("042700"))
+                .thenReturn(StockFundamentalIndicator.builder().totalScore(new BigDecimal("12.5")).build());
 
         StockDataBootstrapService.BootstrapResult result = service.bootstrap("042700", from, to, null, 30, 50);
 
         assertThat(result.allSucceeded()).isTrue();
         assertThat(result.stockCode()).isEqualTo("042700");
         assertThat(result.stockName()).isEqualTo("한미반도체");
-        assertThat(result.steps()).hasSize(9);
+        assertThat(result.steps()).hasSize(11);
         verify(stockService).upsertStockMasterFromDart("042700", "한미반도체", "00161383");
     }
 
