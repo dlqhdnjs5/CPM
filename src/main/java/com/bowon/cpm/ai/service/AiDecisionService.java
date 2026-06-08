@@ -10,6 +10,8 @@ import com.bowon.cpm.ai.prompt.AiDecisionPromptBuilder;
 import com.bowon.cpm.broker.BrokerClient;
 import com.bowon.cpm.broker.dto.AccountBalanceResult;
 import com.bowon.cpm.broker.dto.StockQuoteResult;
+import com.bowon.cpm.broker.kis.KisProperties;
+import com.bowon.cpm.common.config.TradingProperties;
 import com.bowon.cpm.feedback.domain.AiFeedback;
 import com.bowon.cpm.feedback.domain.AiPeriodicSummary;
 import com.bowon.cpm.feedback.mapper.AiFeedbackMapper;
@@ -27,6 +29,7 @@ import com.bowon.cpm.market.mapper.StockIndicatorDailyMapper;
 import com.bowon.cpm.market.mapper.StockPriceDailyMapper;
 import com.bowon.cpm.news.domain.StockNews;
 import com.bowon.cpm.news.mapper.StockNewsMapper;
+import com.bowon.cpm.paper.service.PaperPortfolioService;
 import com.bowon.cpm.stock.service.StockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -68,6 +71,9 @@ public class AiDecisionService {
     private final AiDecisionParser parser;
 
     private final BrokerClient brokerClient;
+    private final TradingProperties tradingProperties;
+    private final PaperPortfolioService paperPortfolioService;
+    private final KisProperties kisProperties;
     private final StockService stockService;
     private final StockPriceDailyMapper stockPriceDailyMapper;
     private final StockIndicatorDailyMapper stockIndicatorDailyMapper;
@@ -282,7 +288,7 @@ public class AiDecisionService {
 
         // 계좌 잔고
         try {
-            AccountBalanceResult balance = brokerClient.getAccountBalance();
+            AccountBalanceResult balance = loadPromptAccountBalance();
             if (balance != null) {
                 d.totalAsset = balance.getTotalAssetAmount();
                 d.availableCash = balance.getAvailableCash();
@@ -381,6 +387,23 @@ public class AiDecisionService {
         } catch (Exception e) {
             log.warn("[ExternalApiLog] 로그 저장 실패: {}", e.getMessage());
         }
+    }
+
+    private AccountBalanceResult loadPromptAccountBalance() {
+        if (tradingProperties.isPaperMode()) {
+            return paperPortfolioService.findLatestAccountBalance(kisProperties.accountNo())
+                    .map(balance -> AccountBalanceResult.builder()
+                            .accountNo(balance.getAccountNo())
+                            .cashBalance(balance.getCashBalance())
+                            .availableCash(balance.getAvailableCash())
+                            .totalAssetAmount(balance.getTotalAssetAmount())
+                            .totalEvaluationAmount(balance.getTotalEvaluationAmount())
+                            .totalProfitLossAmount(balance.getTotalProfitLossAmount())
+                            .totalProfitLossRate(balance.getTotalProfitLossRate())
+                            .build())
+                    .orElse(null);
+        }
+        return brokerClient.getAccountBalance();
     }
 
     private <T> T safeCall(java.util.function.Supplier<T> supplier, T fallback, String label) {
