@@ -21,11 +21,13 @@ import com.bowon.cpm.dart.mapper.DartMajorEventMapper;
 import com.bowon.cpm.dart.service.DartFinancialService;
 import com.bowon.cpm.feedback.mapper.AiFeedbackMapper;
 import com.bowon.cpm.feedback.mapper.AiPeriodicSummaryMapper;
+import com.bowon.cpm.fundamental.service.FundamentalIndicatorService;
 import com.bowon.cpm.market.mapper.StockIndicatorDailyMapper;
 import com.bowon.cpm.market.mapper.StockPriceDailyMapper;
 import com.bowon.cpm.news.mapper.StockNewsMapper;
 import com.bowon.cpm.paper.domain.PaperAccountBalance;
 import com.bowon.cpm.paper.service.PaperPortfolioService;
+import com.bowon.cpm.portfolio.mapper.PortfolioPositionMapper;
 import com.bowon.cpm.stock.service.StockService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -66,6 +68,8 @@ class AiDecisionServiceTest {
     @Mock DartDisclosureMapper dartDisclosureMapper;
     @Mock DartMajorEventMapper dartMajorEventMapper;
     @Mock DartFinancialService dartFinancialService;
+    @Mock FundamentalIndicatorService fundamentalIndicatorService;
+    @Mock PortfolioPositionMapper portfolioPositionMapper;
     @Mock AiDecisionMapper decisionMapper;
     @Mock ExternalApiCallLogMapper externalApiCallLogMapper;
     @Mock AiFeedbackMapper aiFeedbackMapper;
@@ -100,6 +104,8 @@ class AiDecisionServiceTest {
                 dartDisclosureMapper,
                 dartMajorEventMapper,
                 dartFinancialService,
+                fundamentalIndicatorService,
+                portfolioPositionMapper,
                 decisionMapper,
                 externalApiCallLogMapper,
                 aiFeedbackMapper,
@@ -121,12 +127,15 @@ class AiDecisionServiceTest {
         when(dartMajorEventMapper.findByStockCodeAndDateAfter(anyString(), any(), any(Integer.class)))
                 .thenReturn(Collections.emptyList());
         when(stockIndicatorDailyMapper.findLatestByStockCode("005930")).thenReturn(Optional.empty());
+        when(fundamentalIndicatorService.findLatest("005930")).thenReturn(Optional.empty());
+        when(paperPortfolioService.findPositionAsPortfolio("80710174", "005930")).thenReturn(null);
         when(aiFeedbackMapper.findRecentByStockCodeAndTypes(anyString(), any(List.class), any(Integer.class)))
                 .thenReturn(Collections.emptyList());
         when(aiPeriodicSummaryMapper.findLatestBySummaryType(anyString())).thenReturn(Optional.empty());
         when(dartFinancialService.summarize("005930")).thenReturn(null);
 
         when(tradingProperties.isPaperMode()).thenReturn(true);
+        when(tradingProperties.normalizedMode()).thenReturn("PAPER");
         when(kisProperties.accountNo()).thenReturn("80710174");
         when(paperPortfolioService.findLatestAccountBalance("80710174"))
                 .thenReturn(Optional.of(PaperAccountBalance.builder()
@@ -156,7 +165,8 @@ class AiDecisionServiceTest {
                 any(List.class), any(List.class), any(List.class),
                 any(BigDecimal.class), any(BigDecimal.class),
                 any(List.class), any(), any(List.class),
-                any(), any(BigDecimal.class), any(), any()
+                any(), any(BigDecimal.class), any(), any(),
+                any(), any(), anyString()
         );
 
         when(openAiProperties.modelDecision()).thenReturn("gpt-test");

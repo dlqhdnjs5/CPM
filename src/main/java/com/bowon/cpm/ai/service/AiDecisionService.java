@@ -23,6 +23,8 @@ import com.bowon.cpm.dart.domain.DartMajorEvent;
 import com.bowon.cpm.dart.mapper.DartDisclosureMapper;
 import com.bowon.cpm.dart.mapper.DartMajorEventMapper;
 import com.bowon.cpm.dart.service.DartFinancialService;
+import com.bowon.cpm.fundamental.domain.StockFundamentalIndicator;
+import com.bowon.cpm.fundamental.service.FundamentalIndicatorService;
 import com.bowon.cpm.market.domain.StockIndicatorDaily;
 import com.bowon.cpm.market.domain.StockPriceDaily;
 import com.bowon.cpm.market.mapper.StockIndicatorDailyMapper;
@@ -30,6 +32,8 @@ import com.bowon.cpm.market.mapper.StockPriceDailyMapper;
 import com.bowon.cpm.news.domain.StockNews;
 import com.bowon.cpm.news.mapper.StockNewsMapper;
 import com.bowon.cpm.paper.service.PaperPortfolioService;
+import com.bowon.cpm.portfolio.domain.PortfolioPosition;
+import com.bowon.cpm.portfolio.mapper.PortfolioPositionMapper;
 import com.bowon.cpm.stock.service.StockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -81,6 +85,8 @@ public class AiDecisionService {
     private final DartDisclosureMapper dartDisclosureMapper;
     private final DartMajorEventMapper dartMajorEventMapper;
     private final DartFinancialService dartFinancialService;
+    private final FundamentalIndicatorService fundamentalIndicatorService;
+    private final PortfolioPositionMapper portfolioPositionMapper;
 
     // 조회용 (insert/update는 persistService 위임)
     private final AiDecisionMapper decisionMapper;
@@ -122,7 +128,9 @@ public class AiDecisionService {
                     input.totalAsset, input.availableCash,
                     input.recentFeedbacks, input.financialSummary, input.majorEvents,
                     input.indicator, input.realtimeQuote,
-                    input.weeklySummary, input.monthlySummary
+                    input.weeklySummary, input.monthlySummary,
+                    input.position, input.fundamentalIndicator,
+                    tradingProperties.normalizedMode()
             );
 
             // 4. prompt log 저장
@@ -272,6 +280,12 @@ public class AiDecisionService {
         // 재무 요약
         d.financialSummary = safeCall(() -> dartFinancialService.summarize(stockCode),
                 null, "재무 요약");
+        d.fundamentalIndicator = safeCall(
+                () -> fundamentalIndicatorService.findLatest(stockCode).orElse(null),
+                null, "fundamental indicator lookup");
+        d.position = safeCall(
+                () -> loadPositionForCurrentMode(stockCode),
+                null, "portfolio position lookup");
 
         // 피드백 (Plan 14 Phase 1: DAILY 제외)
         d.recentFeedbacks = safeCall(() -> aiFeedbackMapper.findRecentByStockCodeAndTypes(
@@ -308,6 +322,18 @@ public class AiDecisionService {
         }
 
         return d;
+    }
+
+    private PortfolioPosition loadPositionForCurrentMode(String stockCode) {
+        String accountNo = kisProperties.accountNo();
+        if (accountNo == null || accountNo.isBlank()) {
+            return null;
+        }
+        if (tradingProperties.isPaperMode()) {
+            return paperPortfolioService.findPositionAsPortfolio(accountNo, stockCode);
+        }
+        return portfolioPositionMapper.findByAccountNoAndStockCode(accountNo, stockCode)
+                .orElse(null);
     }
 
     // ===========================================================================
@@ -423,6 +449,8 @@ public class AiDecisionService {
         List<DartMajorEvent> majorEvents = Collections.emptyList();
         List<AiFeedback> recentFeedbacks = Collections.emptyList();
         StockIndicatorDaily indicator;
+        PortfolioPosition position;
+        StockFundamentalIndicator fundamentalIndicator;
         String financialSummary;
         BigDecimal totalAsset;
         BigDecimal availableCash;

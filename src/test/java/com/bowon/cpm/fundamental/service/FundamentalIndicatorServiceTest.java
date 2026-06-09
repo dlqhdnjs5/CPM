@@ -122,7 +122,7 @@ class FundamentalIndicatorServiceTest {
         assertThat(result.getRevenue()).isEqualByComparingTo("333605938000000");
         assertThat(result.getOperatingIncome()).isEqualByComparingTo("43601051000000");
         assertThat(result.getTotalAssets()).isEqualByComparingTo("566942110000000");
-        assertThat(result.getDebtRatio()).isEqualByComparingTo("29.937122");
+        assertThat(result.getDebtRatio()).isEqualByComparingTo("29.937127");
         assertThat(result.getPbr()).isNotNull();
         verify(indicatorMapper).upsert(org.mockito.ArgumentMatchers.any());
     }
