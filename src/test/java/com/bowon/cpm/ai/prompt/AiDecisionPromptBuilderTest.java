@@ -132,6 +132,38 @@ class AiDecisionPromptBuilderTest {
     }
 
     @Test
+    @DisplayName("incomplete latest daily candle is excluded from AI price quality input")
+    void incomplete_latest_daily_candle_is_excluded() throws Exception {
+        List<StockPriceDaily> prices = samsungPricesWithIncompleteLatest();
+
+        String prompt = builder.buildUserPrompt(
+                "005930", "Samsung Electronics",
+                prices, List.of(), List.of(),
+                new BigDecimal("3000000"), new BigDecimal("3000000"),
+                List.of(), null, List.of(),
+                StockIndicatorDaily.builder()
+                        .tradeDate(LocalDate.of(2026, 6, 5))
+                        .ma5(new BigDecimal("334300"))
+                        .ma20(new BigDecimal("304125"))
+                        .rsi14(new BigDecimal("53.93"))
+                        .build(),
+                new BigDecimal("322000"),
+                null, null
+        );
+
+        JsonNode root = parseInputJson(prompt);
+        JsonNode stock = root.path("stock");
+        JsonNode quality = root.path("priceDataQuality");
+
+        assertThat(stock.path("latestDailyTradeDate").asText()).isEqualTo("2026-06-05");
+        assertThat(stock.path("latestDailyClosePrice").decimalValue()).isEqualByComparingTo("335000.00");
+        assertThat(quality.path("excludedLatestDailyPrice").asBoolean()).isTrue();
+        assertThat(quality.path("currentPriceDailyCloseGapRate").decimalValue())
+                .isLessThan(new BigDecimal("5.0"));
+        assertThat(quality.path("quality").asText()).isEqualTo("HIGH");
+    }
+
+    @Test
     @DisplayName("missing position becomes non-holding so the model is instructed not to sell")
     void missing_position_is_non_holding() throws Exception {
         String prompt = builder.buildUserPrompt(
@@ -200,5 +232,39 @@ class AiDecisionPromptBuilderTest {
                         .publishedAt(LocalDateTime.of(2026, 6, 7, 9, 0))
                         .build()
         );
+    }
+
+    private List<StockPriceDaily> samsungPricesWithIncompleteLatest() {
+        List<StockPriceDaily> prices = new ArrayList<>();
+        prices.add(StockPriceDaily.builder()
+                .stockCode("005930")
+                .tradeDate(LocalDate.of(2026, 6, 9))
+                .openPrice(new BigDecimal("295500"))
+                .highPrice(new BigDecimal("295500"))
+                .lowPrice(new BigDecimal("295500"))
+                .closePrice(new BigDecimal("295500"))
+                .volume(577L)
+                .build());
+        prices.add(StockPriceDaily.builder()
+                .stockCode("005930")
+                .tradeDate(LocalDate.of(2026, 6, 5))
+                .openPrice(new BigDecimal("333500"))
+                .highPrice(new BigDecimal("343000"))
+                .lowPrice(new BigDecimal("325000"))
+                .closePrice(new BigDecimal("335000"))
+                .volume(23921481L)
+                .build());
+        for (int i = 1; i <= 20; i++) {
+            prices.add(StockPriceDaily.builder()
+                    .stockCode("005930")
+                    .tradeDate(LocalDate.of(2026, 6, 5).minusDays(i))
+                    .openPrice(new BigDecimal("300000"))
+                    .highPrice(new BigDecimal("340000"))
+                    .lowPrice(new BigDecimal("290000"))
+                    .closePrice(new BigDecimal("320000"))
+                    .volume(30000000L)
+                    .build());
+        }
+        return prices;
     }
 }

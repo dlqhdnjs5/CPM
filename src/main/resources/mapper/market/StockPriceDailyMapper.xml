@@ -10,7 +10,7 @@
         - 이미 존재하는 날짜는 건너뜀 (중복 무시)
     -->
     <insert id="insertBatch" parameterType="java.util.List">
-        INSERT IGNORE INTO stock_price_daily (
+        INSERT INTO stock_price_daily (
             stock_code,
             trade_date,
             open_price,
@@ -34,6 +34,14 @@
             #{item.source}
         )
         </foreach>
+        ON DUPLICATE KEY UPDATE
+            open_price = VALUES(open_price),
+            high_price = VALUES(high_price),
+            low_price = VALUES(low_price),
+            close_price = VALUES(close_price),
+            volume = VALUES(volume),
+            trading_value = VALUES(trading_value),
+            source = VALUES(source)
     </insert>
 
     <!--

@@ -16,6 +16,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 
 import static org.mockito.Mockito.verify;
@@ -30,6 +33,7 @@ class MarketDataServiceTest {
     @Mock StockPriceDailyMapper stockPriceDailyMapper;
     @Mock BrokerApiLogMapper brokerApiLogMapper;
     @Mock StockService stockService;
+    Clock clock = Clock.fixed(Instant.parse("2026-06-05T07:00:00Z"), ZoneId.of("Asia/Seoul"));
 
     MarketDataService service;
 
@@ -41,7 +45,8 @@ class MarketDataServiceTest {
                 realtimeQuoteMapper,
                 stockPriceDailyMapper,
                 brokerApiLogMapper,
-                stockService
+                stockService,
+                clock
         );
     }
 

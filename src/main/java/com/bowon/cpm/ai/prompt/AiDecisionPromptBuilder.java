@@ -36,6 +36,7 @@ public class AiDecisionPromptBuilder {
     private static final BigDecimal LOW_VOLUME_RATIO = new BigDecimal("0.20");
     private static final BigDecimal HIGH_VOLUME_RATIO = new BigDecimal("3.00");
     private static final BigDecimal LOW_QUALITY_PRICE_GAP_RATE = new BigDecimal("5.00");
+    private static final BigDecimal INCOMPLETE_LATEST_VOLUME_RATIO = new BigDecimal("0.05");
     private static final int TOP_NEWS_LIMIT = 5;
 
     public String buildSystemPrompt() {
@@ -169,31 +170,35 @@ public class AiDecisionPromptBuilder {
             StockFundamentalIndicator fundamentalIndicator,
             String tradingMode
     ) {
-        StockPriceDaily latestPrice = latestDailyPrice(dailyPrices);
+        List<StockPriceDaily> effectiveDailyPrices = effectiveDailyPrices(dailyPrices, realtimeQuote);
+        StockPriceDaily latestPrice = latestDailyPrice(effectiveDailyPrices);
         BigDecimal dailyClose = latestPrice != null ? latestPrice.getClosePrice() : null;
         BigDecimal currentPrice = realtimeQuote != null ? realtimeQuote : dailyClose;
-        BigDecimal volumeRatio20 = calculateVolumeRatio20(dailyPrices);
+        BigDecimal volumeRatio20 = calculateVolumeRatio20(effectiveDailyPrices);
         BigDecimal currentPriceDailyCloseGapRate = calculateGapRate(currentPrice, dailyClose);
+        boolean excludedLatestDailyPrice = effectiveDailyPrices.size() < dailyPrices.size();
+        StockIndicatorDaily effectiveIndicator = effectiveIndicator(indicator, latestPrice);
 
         Map<String, Object> root = orderedMap();
         root.put("stock", stockSection(stockCode, stockName, currentPrice, latestPrice));
         root.put("account", accountSection(totalAsset, availableCash, tradingMode));
         root.put("position", positionSection(position));
-        root.put("technical", technicalSection(indicator, volumeRatio20));
+        root.put("technical", technicalSection(effectiveIndicator, volumeRatio20));
         root.put("priceDataQuality", priceDataQualitySection(
-                dailyPrices,
-                indicator,
+                effectiveDailyPrices,
+                effectiveIndicator,
                 currentPrice,
                 dailyClose,
                 currentPriceDailyCloseGapRate,
-                volumeRatio20
+                volumeRatio20,
+                excludedLatestDailyPrice
         ));
         root.put("marketContext", emptyMarketContext());
         root.put("newsSummary", newsSummarySection(newsList));
         root.put("disclosureSummary", disclosureSummarySection(disclosures, majorEvents));
         root.put("supplyDemand", emptySupplyDemand());
         root.put("fundamental", fundamentalSection(fundamentalIndicator, financialSummary));
-        root.put("riskReward", riskRewardSection(dailyPrices, currentPrice));
+        root.put("riskReward", riskRewardSection(effectiveDailyPrices, currentPrice));
         root.put("strategyFeedback", strategyFeedbackSection(recentFeedbacks, weeklySummary, monthlySummary));
         return root;
     }
@@ -267,7 +272,8 @@ public class AiDecisionPromptBuilder {
             BigDecimal currentPrice,
             BigDecimal dailyClose,
             BigDecimal currentPriceDailyCloseGapRate,
-            BigDecimal volumeRatio20
+            BigDecimal volumeRatio20,
+            boolean excludedLatestDailyPrice
     ) {
         boolean latestVolumeAbnormal = isLatestVolumeAbnormal(volumeRatio20);
         String quality = priceDataQuality(dailyPrices, indicator, currentPrice, dailyClose,
@@ -279,6 +285,7 @@ public class AiDecisionPromptBuilder {
         section.put("quality", quality);
         section.put("dailyPriceCount", dailyPrices.size());
         section.put("hasLatestIndicator", indicator != null);
+        section.put("excludedLatestDailyPrice", excludedLatestDailyPrice);
         return section;
     }
 
@@ -475,6 +482,65 @@ public class AiDecisionPromptBuilder {
                 .filter(price -> price.getTradeDate() != null)
                 .max(Comparator.comparing(StockPriceDaily::getTradeDate))
                 .orElse(dailyPrices.isEmpty() ? null : dailyPrices.get(0));
+    }
+
+    private List<StockPriceDaily> effectiveDailyPrices(List<StockPriceDaily> dailyPrices, BigDecimal realtimeQuote) {
+        if (dailyPrices.size() < 2 || realtimeQuote == null) {
+            return dailyPrices;
+        }
+        StockPriceDaily latest = latestDailyPrice(dailyPrices);
+        if (latest == null || !looksIncompleteLatestDailyPrice(dailyPrices, latest, realtimeQuote)) {
+            return dailyPrices;
+        }
+        return dailyPrices.stream()
+                .filter(price -> price != latest)
+                .toList();
+    }
+
+    private boolean looksIncompleteLatestDailyPrice(
+            List<StockPriceDaily> dailyPrices,
+            StockPriceDaily latest,
+            BigDecimal realtimeQuote
+    ) {
+        BigDecimal latestClose = latest.getClosePrice();
+        BigDecimal gapRate = calculateGapRate(realtimeQuote, latestClose);
+        BigDecimal latestVolumeRatio = calculateLatestVolumeRatio(dailyPrices, latest, 20);
+        return gapRate != null
+                && gapRate.compareTo(LOW_QUALITY_PRICE_GAP_RATE) > 0
+                && latestVolumeRatio != null
+                && latestVolumeRatio.compareTo(INCOMPLETE_LATEST_VOLUME_RATIO) < 0;
+    }
+
+    private BigDecimal calculateLatestVolumeRatio(
+            List<StockPriceDaily> dailyPrices,
+            StockPriceDaily latest,
+            int period
+    ) {
+        if (latest.getVolume() == null || latest.getVolume() <= 0) {
+            return null;
+        }
+        double average = dailyPrices.stream()
+                .filter(price -> price != latest)
+                .filter(price -> price.getVolume() != null && price.getVolume() > 0)
+                .sorted(Comparator.comparing(StockPriceDaily::getTradeDate,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(period)
+                .mapToLong(StockPriceDaily::getVolume)
+                .average()
+                .orElse(0);
+        if (average <= 0) {
+            return null;
+        }
+        return BigDecimal.valueOf(latest.getVolume())
+                .divide(BigDecimal.valueOf(average), 6, RoundingMode.HALF_UP);
+    }
+
+    private StockIndicatorDaily effectiveIndicator(StockIndicatorDaily indicator, StockPriceDaily latestPrice) {
+        if (indicator == null || latestPrice == null
+                || indicator.getTradeDate() == null || latestPrice.getTradeDate() == null) {
+            return indicator;
+        }
+        return indicator.getTradeDate().isAfter(latestPrice.getTradeDate()) ? null : indicator;
     }
 
     private BigDecimal calculateVolumeRatio20(List<StockPriceDaily> dailyPrices) {

@@ -17,8 +17,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -34,8 +36,10 @@ public class MarketDataService {
     private final StockPriceDailyMapper stockPriceDailyMapper;
     private final BrokerApiLogMapper brokerApiLogMapper;
     private final StockService stockService;
+    private final Clock clock;
 
     private static final DateTimeFormatter KIS_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final LocalTime DAILY_CANDLE_AVAILABLE_TIME = LocalTime.of(15, 40);
     private static final String UNKNOWN_MARKET_TYPE = "UNKNOWN";
 
     /**
@@ -115,9 +119,10 @@ public class MarketDataService {
                             .tradingValue(parseBigDecimal(o.tradingValue()))
                             .source("KIS")
                             .build())
+                    .filter(this::isConfirmedDailyPrice)
                     .collect(Collectors.toList());
 
-            // 배치 INSERT IGNORE
+            // Upsert so an early partial daily candle can be corrected by a later fetch.
             if (!dailyList.isEmpty()) {
                 stockPriceDailyMapper.insertBatch(dailyList);
                 savedCount = dailyList.size();
@@ -193,6 +198,19 @@ public class MarketDataService {
 
     private boolean hasUsableStockName(String stockName, String stockCode) {
         return stockName != null && !stockName.isBlank() && !stockName.equals(stockCode);
+    }
+
+    private boolean isConfirmedDailyPrice(StockPriceDaily dailyPrice) {
+        LocalDate tradeDate = dailyPrice.getTradeDate();
+        if (tradeDate == null) {
+            return false;
+        }
+
+        LocalDate today = LocalDate.now(clock);
+        if (tradeDate.isAfter(today)) {
+            return false;
+        }
+        return !tradeDate.isEqual(today) || !LocalTime.now(clock).isBefore(DAILY_CANDLE_AVAILABLE_TIME);
     }
 
     private BigDecimal parseBigDecimal(String value) {
