@@ -112,23 +112,31 @@ class AiDecisionPromptBuilderTest {
     }
 
     @Test
-    @DisplayName("low price data quality is exposed when realtime price differs too much from latest daily close")
-    void price_quality_low_when_current_price_gap_is_high() throws Exception {
+    @DisplayName("large realtime move is exposed as market movement, not low data quality")
+    void large_realtime_move_is_market_movement_not_low_quality() throws Exception {
         String prompt = builder.buildUserPrompt(
                 "005930", "Samsung Electronics",
                 sampleDailyPrices(), List.of(), List.of(),
                 BigDecimal.ZERO, BigDecimal.ZERO,
                 List.of(), null, List.of(),
-                null,
+                StockIndicatorDaily.builder()
+                        .tradeDate(LocalDate.of(2026, 6, 8))
+                        .ma5(new BigDecimal("100000"))
+                        .ma20(new BigDecimal("99000"))
+                        .rsi14(new BigDecimal("50"))
+                        .build(),
                 new BigDecimal("120000"),
                 null, null
         );
 
-        JsonNode quality = parseInputJson(prompt).path("priceDataQuality");
+        JsonNode root = parseInputJson(prompt);
+        JsonNode quality = root.path("priceDataQuality");
+        JsonNode marketMove = root.path("marketMove");
 
-        assertThat(quality.path("currentPriceDailyCloseGapRate").decimalValue())
+        assertThat(quality.path("quality").asText()).isEqualTo("HIGH");
+        assertThat(marketMove.path("currentVsLatestCloseRate").decimalValue())
                 .isGreaterThan(new BigDecimal("5.0"));
-        assertThat(quality.path("quality").asText()).isEqualTo("LOW");
+        assertThat(marketMove.path("largeCurrentMove").asBoolean()).isTrue();
     }
 
     @Test
@@ -154,13 +162,16 @@ class AiDecisionPromptBuilderTest {
         JsonNode root = parseInputJson(prompt);
         JsonNode stock = root.path("stock");
         JsonNode quality = root.path("priceDataQuality");
+        JsonNode marketMove = root.path("marketMove");
 
         assertThat(stock.path("latestDailyTradeDate").asText()).isEqualTo("2026-06-05");
         assertThat(stock.path("latestDailyClosePrice").decimalValue()).isEqualByComparingTo("335000.00");
         assertThat(quality.path("excludedLatestDailyPrice").asBoolean()).isTrue();
-        assertThat(quality.path("currentPriceDailyCloseGapRate").decimalValue())
-                .isLessThan(new BigDecimal("5.0"));
         assertThat(quality.path("quality").asText()).isEqualTo("HIGH");
+        assertThat(marketMove.path("currentVsLatestCloseRate").decimalValue())
+                .isGreaterThan(new BigDecimal("-5.0"))
+                .isLessThan(new BigDecimal("0"));
+        assertThat(marketMove.path("largeCurrentMove").asBoolean()).isFalse();
     }
 
     @Test
