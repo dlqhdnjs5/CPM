@@ -17,6 +17,11 @@ public class NewsAnalysisScheduler {
     private final SchedulerLogSupport logSupport;
     private final NewsAnalysisService newsAnalysisService;
 
+    @Scheduled(cron = "0 30 6 * * MON-FRI")
+    public void runEarlyMorning() {
+        run();
+    }
+
     @Scheduled(cron = "0 55 8 * * MON-FRI")
     public void runBeforeMarket() {
         run();

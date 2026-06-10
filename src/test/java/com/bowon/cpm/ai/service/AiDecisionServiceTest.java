@@ -22,6 +22,7 @@ import com.bowon.cpm.dart.service.DartFinancialService;
 import com.bowon.cpm.feedback.mapper.AiFeedbackMapper;
 import com.bowon.cpm.feedback.mapper.AiPeriodicSummaryMapper;
 import com.bowon.cpm.fundamental.service.FundamentalIndicatorService;
+import com.bowon.cpm.macro.service.MacroContextService;
 import com.bowon.cpm.market.mapper.StockIndicatorDailyMapper;
 import com.bowon.cpm.market.mapper.StockPriceDailyMapper;
 import com.bowon.cpm.news.mapper.StockNewsMapper;
@@ -70,6 +71,7 @@ class AiDecisionServiceTest {
     @Mock DartFinancialService dartFinancialService;
     @Mock FundamentalIndicatorService fundamentalIndicatorService;
     @Mock PortfolioPositionMapper portfolioPositionMapper;
+    @Mock MacroContextService macroContextService;
     @Mock AiDecisionMapper decisionMapper;
     @Mock ExternalApiCallLogMapper externalApiCallLogMapper;
     @Mock AiFeedbackMapper aiFeedbackMapper;
@@ -106,6 +108,7 @@ class AiDecisionServiceTest {
                 dartFinancialService,
                 fundamentalIndicatorService,
                 portfolioPositionMapper,
+                macroContextService,
                 decisionMapper,
                 externalApiCallLogMapper,
                 aiFeedbackMapper,
@@ -166,7 +169,7 @@ class AiDecisionServiceTest {
                 any(BigDecimal.class), any(BigDecimal.class),
                 any(List.class), any(), any(List.class),
                 any(), any(BigDecimal.class), any(), any(),
-                any(), any(), anyString()
+                any(), any(), any(), anyString()
         );
 
         when(openAiProperties.modelDecision()).thenReturn("gpt-test");

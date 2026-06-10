@@ -29,6 +29,8 @@ import com.bowon.cpm.market.domain.StockIndicatorDaily;
 import com.bowon.cpm.market.domain.StockPriceDaily;
 import com.bowon.cpm.market.mapper.StockIndicatorDailyMapper;
 import com.bowon.cpm.market.mapper.StockPriceDailyMapper;
+import com.bowon.cpm.macro.domain.MacroContext;
+import com.bowon.cpm.macro.service.MacroContextService;
 import com.bowon.cpm.news.domain.StockNews;
 import com.bowon.cpm.news.mapper.StockNewsMapper;
 import com.bowon.cpm.paper.service.PaperPortfolioService;
@@ -87,6 +89,7 @@ public class AiDecisionService {
     private final DartFinancialService dartFinancialService;
     private final FundamentalIndicatorService fundamentalIndicatorService;
     private final PortfolioPositionMapper portfolioPositionMapper;
+    private final MacroContextService macroContextService;
 
     // 조회용 (insert/update는 persistService 위임)
     private final AiDecisionMapper decisionMapper;
@@ -130,6 +133,7 @@ public class AiDecisionService {
                     input.indicator, input.realtimeQuote,
                     input.weeklySummary, input.monthlySummary,
                     input.position, input.fundamentalIndicator,
+                    input.macroContext,
                     tradingProperties.normalizedMode()
             );
 
@@ -286,6 +290,9 @@ public class AiDecisionService {
         d.position = safeCall(
                 () -> loadPositionForCurrentMode(stockCode),
                 null, "portfolio position lookup");
+        d.macroContext = safeCall(
+                macroContextService::latestContext,
+                null, "macro context lookup");
 
         // 피드백 (Plan 14 Phase 1: DAILY 제외)
         d.recentFeedbacks = safeCall(() -> aiFeedbackMapper.findRecentByStockCodeAndTypes(
@@ -457,5 +464,6 @@ public class AiDecisionService {
         BigDecimal realtimeQuote;
         AiPeriodicSummary weeklySummary;
         AiPeriodicSummary monthlySummary;
+        MacroContext macroContext;
     }
 }

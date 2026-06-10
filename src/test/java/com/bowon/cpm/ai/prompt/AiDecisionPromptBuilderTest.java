@@ -5,6 +5,7 @@ import com.bowon.cpm.feedback.domain.AiPeriodicSummary;
 import com.bowon.cpm.fundamental.domain.StockFundamentalIndicator;
 import com.bowon.cpm.market.domain.StockIndicatorDaily;
 import com.bowon.cpm.market.domain.StockPriceDaily;
+import com.bowon.cpm.macro.domain.MacroContext;
 import com.bowon.cpm.news.domain.StockNews;
 import com.bowon.cpm.portfolio.domain.PortfolioPosition;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -29,6 +30,7 @@ class AiDecisionPromptBuilderTest {
     @DisplayName("system prompt keeps enums in English and natural-language fields in Korean")
     void system_prompt_requires_korean_explanations_with_english_enums() {
         String prompt = builder.buildSystemPrompt();
+        String normalizedPrompt = prompt.replaceAll("\\s+", " ");
 
         assertThat(prompt).contains("Write all natural-language response fields in Korean");
         assertThat(prompt).contains("reason");
@@ -36,6 +38,15 @@ class AiDecisionPromptBuilderTest {
         assertThat(prompt).contains("factors[].summary");
         assertThat(prompt).contains("Keep enum/code values in English");
         assertThat(prompt).contains("BUY, SELL, HOLD");
+        assertThat(prompt).contains("macroContext");
+        assertThat(prompt).contains("market-wide liquidity");
+        assertThat(normalizedPrompt).contains("stock.currentPrice as the market price source of truth");
+        assertThat(normalizedPrompt).contains("recommendedPortfolioWeight must be 0.0");
+        assertThat(normalizedPrompt).contains("riskReward.riskRewardRatio is below 1.0");
+        assertThat(normalizedPrompt).contains("do not infer news sentiment");
+        assertThat(normalizedPrompt).contains("do not infer foreign, institution");
+        assertThat(normalizedPrompt).contains("largeCurrentMove is true");
+        assertThat(normalizedPrompt).contains("Do not add fields outside the schema");
     }
 
     @Test
@@ -112,23 +123,31 @@ class AiDecisionPromptBuilderTest {
     }
 
     @Test
-    @DisplayName("low price data quality is exposed when realtime price differs too much from latest daily close")
-    void price_quality_low_when_current_price_gap_is_high() throws Exception {
+    @DisplayName("large realtime move is exposed as market movement, not low data quality")
+    void large_realtime_move_is_market_movement_not_low_quality() throws Exception {
         String prompt = builder.buildUserPrompt(
                 "005930", "Samsung Electronics",
                 sampleDailyPrices(), List.of(), List.of(),
                 BigDecimal.ZERO, BigDecimal.ZERO,
                 List.of(), null, List.of(),
-                null,
+                StockIndicatorDaily.builder()
+                        .tradeDate(LocalDate.of(2026, 6, 8))
+                        .ma5(new BigDecimal("100000"))
+                        .ma20(new BigDecimal("99000"))
+                        .rsi14(new BigDecimal("50"))
+                        .build(),
                 new BigDecimal("120000"),
                 null, null
         );
 
-        JsonNode quality = parseInputJson(prompt).path("priceDataQuality");
+        JsonNode root = parseInputJson(prompt);
+        JsonNode quality = root.path("priceDataQuality");
+        JsonNode marketMove = root.path("marketMove");
 
-        assertThat(quality.path("currentPriceDailyCloseGapRate").decimalValue())
+        assertThat(quality.path("quality").asText()).isEqualTo("HIGH");
+        assertThat(marketMove.path("currentVsLatestCloseRate").decimalValue())
                 .isGreaterThan(new BigDecimal("5.0"));
-        assertThat(quality.path("quality").asText()).isEqualTo("LOW");
+        assertThat(marketMove.path("largeCurrentMove").asBoolean()).isTrue();
     }
 
     @Test
@@ -154,13 +173,16 @@ class AiDecisionPromptBuilderTest {
         JsonNode root = parseInputJson(prompt);
         JsonNode stock = root.path("stock");
         JsonNode quality = root.path("priceDataQuality");
+        JsonNode marketMove = root.path("marketMove");
 
         assertThat(stock.path("latestDailyTradeDate").asText()).isEqualTo("2026-06-05");
         assertThat(stock.path("latestDailyClosePrice").decimalValue()).isEqualByComparingTo("335000.00");
         assertThat(quality.path("excludedLatestDailyPrice").asBoolean()).isTrue();
-        assertThat(quality.path("currentPriceDailyCloseGapRate").decimalValue())
-                .isLessThan(new BigDecimal("5.0"));
         assertThat(quality.path("quality").asText()).isEqualTo("HIGH");
+        assertThat(marketMove.path("currentVsLatestCloseRate").decimalValue())
+                .isGreaterThan(new BigDecimal("-5.0"))
+                .isLessThan(new BigDecimal("0"));
+        assertThat(marketMove.path("largeCurrentMove").asBoolean()).isFalse();
     }
 
     @Test
@@ -180,6 +202,60 @@ class AiDecisionPromptBuilderTest {
         assertThat(position.path("isHolding").asBoolean()).isFalse();
         assertThat(position.path("quantity").asInt()).isZero();
         assertThat(parseInputJson(prompt).path("priceDataQuality").path("quality").asText()).isEqualTo("LOW");
+    }
+
+    @Test
+    @DisplayName("macro context is included as a separate market-wide input section")
+    void macro_context_is_included() throws Exception {
+        MacroContext macroContext = new MacroContext(
+                new MacroContext.MacroSignal(
+                        "MACRO_FED",
+                        "HAWKISH",
+                        new BigDecimal("-0.4"),
+                        new BigDecimal("0.8"),
+                        2,
+                        List.of(new MacroContext.MacroNewsItem(
+                                "Fed keeps rates higher for longer",
+                                "연준의 매파적 발언으로 금리 부담이 커졌습니다.",
+                                "NEGATIVE",
+                                new BigDecimal("-0.6"),
+                                new BigDecimal("0.9"),
+                                LocalDateTime.of(2026, 6, 9, 22, 0)
+                        )),
+                        "MACRO_FED stance=HAWKISH"
+                ),
+                new MacroContext.MacroSignal("MACRO_BOK", "NEUTRAL", BigDecimal.ZERO,
+                        new BigDecimal("0.3"), 1, List.of(), "MACRO_BOK stance=NEUTRAL"),
+                new MacroContext.MacroSignal("MACRO_MARKET", "RISK_OFF", new BigDecimal("-0.2"),
+                        new BigDecimal("0.5"), 1, List.of(), "MACRO_MARKET stance=RISK_OFF"),
+                new BigDecimal("0.55"),
+                LocalDateTime.of(2026, 6, 10, 1, 0)
+        );
+
+        String prompt = builder.buildUserPrompt(
+                "005930", "Samsung Electronics",
+                sampleDailyPrices(), List.of(), List.of(),
+                BigDecimal.ZERO, BigDecimal.ZERO,
+                List.of(), null, List.of(),
+                StockIndicatorDaily.builder()
+                        .tradeDate(LocalDate.of(2026, 6, 8))
+                        .ma5(new BigDecimal("100000"))
+                        .ma20(new BigDecimal("99000"))
+                        .rsi14(new BigDecimal("50"))
+                        .build(),
+                new BigDecimal("101000"),
+                null, null,
+                null, null,
+                macroContext,
+                "PAPER"
+        );
+
+        JsonNode macro = parseInputJson(prompt).path("macroContext");
+
+        assertThat(macro.path("fed").path("stance").asText()).isEqualTo("HAWKISH");
+        assertThat(macro.path("fed").path("topNews").get(0).path("title").asText())
+                .contains("Fed");
+        assertThat(macro.path("combinedRiskScore").decimalValue()).isEqualByComparingTo("0.55");
     }
 
     private JsonNode parseInputJson(String prompt) throws Exception {

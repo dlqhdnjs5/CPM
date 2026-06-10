@@ -7,6 +7,7 @@ import com.bowon.cpm.feedback.domain.AiPeriodicSummary;
 import com.bowon.cpm.fundamental.domain.StockFundamentalIndicator;
 import com.bowon.cpm.market.domain.StockIndicatorDaily;
 import com.bowon.cpm.market.domain.StockPriceDaily;
+import com.bowon.cpm.macro.domain.MacroContext;
 import com.bowon.cpm.news.domain.StockNews;
 import com.bowon.cpm.portfolio.domain.PortfolioPosition;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -51,15 +52,48 @@ public class AiDecisionPromptBuilder {
                 FUNDAMENTAL, SUPPLY_DEMAND, POSITIVE, NEGATIVE, and NEUTRAL.
 
                 Use the provided inputJson as the source of truth. Missing fields are null.
-                Be conservative: when data quality is LOW, important data is missing, or the
-                evidence is mixed, return HOLD with lower confidence.
+                Be conservative: when true data quality is LOW, important data is missing, or
+                the evidence is mixed, return HOLD with lower confidence.
 
                 Decision rules:
                 - decision must be one of BUY, SELL, HOLD.
+                - Return only fields defined in the required response schema. Do not add fields
+                  outside the schema.
+                - Use inputJson.stock.currentPrice as the market price source of truth.
+                - If inputJson.stock.currentPrice and inputJson.position.currentPrice differ,
+                  prefer inputJson.stock.currentPrice for all decision, target, stop-loss,
+                  risk-reward, and portfolio-weight calculations.
+                - Use inputJson.position.averagePrice only for position profit/loss context.
                 - If inputJson.priceDataQuality.quality is LOW, do not return BUY or SELL.
                 - If inputJson.position.isHolding is false, do not return SELL.
                 - If inputJson.position.isHolding is true, evaluate HOLD, SELL, or cautious additional BUY.
-                - If latestVolumeAbnormal is true or currentPriceDailyCloseGapRate is high, lower confidence.
+                - If decision is HOLD, recommendedPortfolioWeight must be 0.0.
+                - For HOLD, targetPrice should use inputJson.riskReward.recentResistancePrice
+                  if available, otherwise null.
+                - For HOLD, stopLossPrice should use inputJson.riskReward.recentSupportPrice
+                  if available, otherwise null.
+                - For HOLD, targetPrice and stopLossPrice are reference levels only, not order instructions.
+                - If inputJson.riskReward.riskRewardRatio is below 1.0, avoid BUY unless
+                  priceDataQuality.quality is HIGH and available technical, news, supply/demand,
+                  and risk-reward signals are strongly aligned. If supplyDemand is unavailable,
+                  do not count it as aligned.
+                - Do not treat a large current-vs-latest-close move as poor data quality.
+                - Interpret marketMove.currentVsLatestCloseRate as market movement: momentum,
+                  overextension, breakdown, or rebound based on volume, trend, news,
+                  support/resistance, and risk-reward.
+                - If marketMove.latestVolumeAbnormal is true, interpret it as a liquidity or
+                  momentum risk signal, not as data corruption by itself.
+                - If marketMove.largeCurrentMove is true, lower confidence unless volume,
+                  trend, news, support/resistance, and risk-reward support the move.
+                - Use inputJson.macroContext only as a market-wide liquidity, interest-rate,
+                  exchange-rate, and risk appetite modifier. It can lower confidence or make
+                  a BUY more cautious, but it must not override stock-specific evidence by itself.
+                - If technical indicators are mostly null, technical analysis must be cautious
+                  and confidence should be lowered.
+                - If newsSummary.topNews is empty and weightedSentimentScore is null, do not
+                  infer news sentiment.
+                - If supplyDemand fields are null, do not infer foreign, institution,
+                  individual, or short-selling flow.
                 - Positive news alone is not enough for BUY when technical trend, supply/demand, or data quality is weak.
                 - Good fundamentals with weak short-term data should usually be HOLD.
                 - Use disclosureSummary event flags instead of over-weighting repeated disclosure titles.
@@ -85,6 +119,7 @@ public class AiDecisionPromptBuilder {
             AiPeriodicSummary monthlySummary,
             PortfolioPosition position,
             StockFundamentalIndicator fundamentalIndicator,
+            MacroContext macroContext,
             String tradingMode
     ) {
         Map<String, Object> inputJson = buildInputJson(
@@ -104,10 +139,36 @@ public class AiDecisionPromptBuilder {
                 monthlySummary,
                 position,
                 fundamentalIndicator,
+                macroContext,
                 tradingMode
         );
 
         return "Input JSON:\n" + toJson(inputJson);
+    }
+
+    public String buildUserPrompt(
+            String stockCode,
+            String stockName,
+            List<StockPriceDaily> dailyPrices,
+            List<StockNews> newsList,
+            List<DartDisclosure> disclosures,
+            BigDecimal totalAsset,
+            BigDecimal availableCash,
+            List<AiFeedback> recentFeedbacks,
+            String financialSummary,
+            List<DartMajorEvent> majorEvents,
+            StockIndicatorDaily indicator,
+            BigDecimal realtimeQuote,
+            AiPeriodicSummary weeklySummary,
+            AiPeriodicSummary monthlySummary,
+            PortfolioPosition position,
+            StockFundamentalIndicator fundamentalIndicator,
+            String tradingMode
+    ) {
+        return buildUserPrompt(stockCode, stockName, dailyPrices, newsList, disclosures,
+                totalAsset, availableCash, recentFeedbacks, financialSummary, majorEvents,
+                indicator, realtimeQuote, weeklySummary, monthlySummary,
+                position, fundamentalIndicator, null, tradingMode);
     }
 
     public String buildUserPrompt(
@@ -129,7 +190,7 @@ public class AiDecisionPromptBuilder {
         return buildUserPrompt(stockCode, stockName, dailyPrices, newsList, disclosures,
                 totalAsset, availableCash, recentFeedbacks, financialSummary, majorEvents,
                 indicator, realtimeQuote, weeklySummary, monthlySummary,
-                null, null, null);
+                null, null, null, null);
     }
 
     public String buildUserPrompt(
@@ -168,6 +229,7 @@ public class AiDecisionPromptBuilder {
             AiPeriodicSummary monthlySummary,
             PortfolioPosition position,
             StockFundamentalIndicator fundamentalIndicator,
+            MacroContext macroContext,
             String tradingMode
     ) {
         List<StockPriceDaily> effectiveDailyPrices = effectiveDailyPrices(dailyPrices, realtimeQuote);
@@ -175,7 +237,7 @@ public class AiDecisionPromptBuilder {
         BigDecimal dailyClose = latestPrice != null ? latestPrice.getClosePrice() : null;
         BigDecimal currentPrice = realtimeQuote != null ? realtimeQuote : dailyClose;
         BigDecimal volumeRatio20 = calculateVolumeRatio20(effectiveDailyPrices);
-        BigDecimal currentPriceDailyCloseGapRate = calculateGapRate(currentPrice, dailyClose);
+        BigDecimal currentVsLatestCloseRate = calculateRate(currentPrice, dailyClose);
         boolean excludedLatestDailyPrice = effectiveDailyPrices.size() < dailyPrices.size();
         StockIndicatorDaily effectiveIndicator = effectiveIndicator(indicator, latestPrice);
 
@@ -189,11 +251,11 @@ public class AiDecisionPromptBuilder {
                 effectiveIndicator,
                 currentPrice,
                 dailyClose,
-                currentPriceDailyCloseGapRate,
-                volumeRatio20,
                 excludedLatestDailyPrice
         ));
+        root.put("marketMove", marketMoveSection(currentVsLatestCloseRate, volumeRatio20));
         root.put("marketContext", emptyMarketContext());
+        root.put("macroContext", macroContextSection(macroContext));
         root.put("newsSummary", newsSummarySection(newsList));
         root.put("disclosureSummary", disclosureSummarySection(disclosures, majorEvents));
         root.put("supplyDemand", emptySupplyDemand());
@@ -271,21 +333,27 @@ public class AiDecisionPromptBuilder {
             StockIndicatorDaily indicator,
             BigDecimal currentPrice,
             BigDecimal dailyClose,
-            BigDecimal currentPriceDailyCloseGapRate,
-            BigDecimal volumeRatio20,
             boolean excludedLatestDailyPrice
     ) {
-        boolean latestVolumeAbnormal = isLatestVolumeAbnormal(volumeRatio20);
-        String quality = priceDataQuality(dailyPrices, indicator, currentPrice, dailyClose,
-                currentPriceDailyCloseGapRate, volumeRatio20);
+        String quality = priceDataQuality(dailyPrices, indicator, currentPrice, dailyClose);
 
         Map<String, Object> section = orderedMap();
-        section.put("currentPriceDailyCloseGapRate", currentPriceDailyCloseGapRate);
-        section.put("latestVolumeAbnormal", latestVolumeAbnormal);
         section.put("quality", quality);
         section.put("dailyPriceCount", dailyPrices.size());
         section.put("hasLatestIndicator", indicator != null);
         section.put("excludedLatestDailyPrice", excludedLatestDailyPrice);
+        return section;
+    }
+
+    private Map<String, Object> marketMoveSection(BigDecimal currentVsLatestCloseRate, BigDecimal volumeRatio20) {
+        boolean latestVolumeAbnormal = isLatestVolumeAbnormal(volumeRatio20);
+
+        Map<String, Object> section = orderedMap();
+        section.put("currentVsLatestCloseRate", currentVsLatestCloseRate);
+        section.put("largeCurrentMove", currentVsLatestCloseRate != null
+                && currentVsLatestCloseRate.abs().compareTo(LOW_QUALITY_PRICE_GAP_RATE) > 0);
+        section.put("latestVolumeAbnormal", latestVolumeAbnormal);
+        section.put("volumeRatio20", volumeRatio20);
         return section;
     }
 
@@ -296,6 +364,58 @@ public class AiDecisionPromptBuilder {
         section.put("sectorChangeRate", null);
         section.put("soxIndexChangeRate", null);
         section.put("usdKrwChangeRate", null);
+        return section;
+    }
+
+    private Map<String, Object> macroContextSection(MacroContext macroContext) {
+        Map<String, Object> section = orderedMap();
+        if (macroContext == null) {
+            section.put("fed", macroSignalSection(null));
+            section.put("bok", macroSignalSection(null));
+            section.put("market", macroSignalSection(null));
+            section.put("combinedRiskScore", null);
+            section.put("generatedAt", null);
+            return section;
+        }
+        section.put("fed", macroSignalSection(macroContext.fed()));
+        section.put("bok", macroSignalSection(macroContext.bok()));
+        section.put("market", macroSignalSection(macroContext.market()));
+        section.put("combinedRiskScore", macroContext.combinedRiskScore());
+        section.put("generatedAt", macroContext.generatedAt() != null ? macroContext.generatedAt().toString() : null);
+        return section;
+    }
+
+    private Map<String, Object> macroSignalSection(MacroContext.MacroSignal signal) {
+        Map<String, Object> section = orderedMap();
+        if (signal == null) {
+            section.put("stance", null);
+            section.put("sentimentScore", null);
+            section.put("impactScore", null);
+            section.put("newsCount", 0);
+            section.put("summary", null);
+            section.put("topNews", List.of());
+            return section;
+        }
+        section.put("code", signal.code());
+        section.put("stance", signal.stance());
+        section.put("sentimentScore", signal.sentimentScore());
+        section.put("impactScore", signal.impactScore());
+        section.put("newsCount", signal.newsCount());
+        section.put("summary", signal.summary());
+        section.put("topNews", signal.topNews().stream()
+                .map(this::macroNewsItemSection)
+                .toList());
+        return section;
+    }
+
+    private Map<String, Object> macroNewsItemSection(MacroContext.MacroNewsItem item) {
+        Map<String, Object> section = orderedMap();
+        section.put("title", item.title());
+        section.put("summary", item.summary());
+        section.put("sentiment", item.sentiment());
+        section.put("sentimentScore", item.sentimentScore());
+        section.put("impactScore", item.impactScore());
+        section.put("publishedAt", item.publishedAt() != null ? item.publishedAt().toString() : null);
         return section;
     }
 
@@ -576,25 +696,25 @@ public class AiDecisionPromptBuilder {
                 .divide(dailyClose, 4, RoundingMode.HALF_UP);
     }
 
+    private BigDecimal calculateRate(BigDecimal value, BigDecimal base) {
+        if (value == null || base == null || base.signum() <= 0) {
+            return null;
+        }
+        return value.subtract(base)
+                .multiply(ONE_HUNDRED)
+                .divide(base, 4, RoundingMode.HALF_UP);
+    }
+
     private String priceDataQuality(
             List<StockPriceDaily> dailyPrices,
             StockIndicatorDaily indicator,
             BigDecimal currentPrice,
-            BigDecimal dailyClose,
-            BigDecimal currentPriceDailyCloseGapRate,
-            BigDecimal volumeRatio20
+            BigDecimal dailyClose
     ) {
         if (currentPrice == null || dailyClose == null || dailyPrices.isEmpty()) {
             return "LOW";
         }
-        if (currentPriceDailyCloseGapRate != null
-                && currentPriceDailyCloseGapRate.compareTo(LOW_QUALITY_PRICE_GAP_RATE) > 0) {
-            return "LOW";
-        }
-        if (volumeRatio20 != null && volumeRatio20.compareTo(LOW_VOLUME_RATIO) < 0) {
-            return "LOW";
-        }
-        if (indicator == null || dailyPrices.size() < 20 || isLatestVolumeAbnormal(volumeRatio20)) {
+        if (indicator == null || dailyPrices.size() < 20) {
             return "MEDIUM";
         }
         return "HIGH";
