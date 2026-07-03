@@ -189,5 +189,78 @@
         LIMIT 1
     </select>
 
-</mapper>
+    <select id="findRecent" resultType="com.bowon.cpm.ai.domain.AiDecision">
+        SELECT id, stock_code, stock_name, decision, confidence,
+               current_price, target_price, stop_loss_price,
+               expected_return_rate, expected_loss_rate, risk_reward_ratio,
+               recommended_portfolio_weight, expected_holding_days,
+               risk_level, reason, raw_response_id, decision_status, created_at
+        FROM ai_decision
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
 
+    <select id="findTradeHistory"
+            resultType="com.bowon.cpm.dashboard.domain.DashboardAiTradeHistoryItem">
+        SELECT
+            a.id AS aiDecisionId,
+            a.stock_code AS stockCode,
+            a.stock_name AS stockName,
+            a.decision AS decision,
+            a.confidence AS confidence,
+            a.current_price AS currentPrice,
+            a.target_price AS targetPrice,
+            a.stop_loss_price AS stopLossPrice,
+            a.recommended_portfolio_weight AS recommendedPortfolioWeight,
+            a.risk_level AS riskLevel,
+            a.decision_status AS decisionStatus,
+            a.reason AS reason,
+            a.created_at AS decisionCreatedAt,
+            r.id AS riskCheckId,
+            r.passed AS riskPassed,
+            r.fail_reason AS riskFailReason,
+            r.checked_at AS riskCheckedAt,
+            o.id AS orderRequestId,
+            o.order_side AS orderSide,
+            o.order_status AS orderStatus,
+            o.order_quantity AS orderQuantity,
+            o.order_amount AS orderAmount,
+            o.broker_type AS brokerType,
+            o.requested_at AS orderRequestedAt
+        FROM ai_decision a
+        LEFT JOIN risk_check_result r
+          ON r.id = (
+            SELECT rr.id
+            FROM risk_check_result rr
+            WHERE rr.ai_decision_id = a.id
+            ORDER BY rr.checked_at DESC, rr.id DESC
+            LIMIT 1
+          )
+        LEFT JOIN order_request o
+          ON o.id = (
+            SELECT oo.id
+            FROM order_request oo
+            WHERE oo.ai_decision_id = a.id
+            <if test="filter == 'BUY_FILLED'">
+              AND oo.order_side = 'BUY'
+              AND oo.order_status = 'FILLED'
+            </if>
+            <if test="filter == 'SELL_FILLED'">
+              AND oo.order_side = 'SELL'
+              AND oo.order_status = 'FILLED'
+            </if>
+            ORDER BY oo.requested_at DESC, oo.id DESC
+            LIMIT 1
+          )
+        WHERE a.decision IN ('BUY', 'SELL')
+        <if test="filter == 'BUY' or filter == 'SELL'">
+          AND a.decision = #{filter}
+        </if>
+        <if test="filter == 'BUY_FILLED' or filter == 'SELL_FILLED'">
+          AND o.id IS NOT NULL
+        </if>
+        ORDER BY a.created_at DESC, a.id DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>

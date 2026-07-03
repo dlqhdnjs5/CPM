@@ -108,17 +108,21 @@ public class MarketDataService {
             // KIS 응답 → StockPriceDaily 변환
             List<StockPriceDaily> dailyList = response.output2().stream()
                     .filter(o -> o.tradeDate() != null && !o.tradeDate().isBlank())
-                    .map(o -> StockPriceDaily.builder()
-                            .stockCode(stockCode)
-                            .tradeDate(LocalDate.parse(o.tradeDate(), KIS_DATE_FORMAT))
-                            .openPrice(parseBigDecimal(o.openPrice()))
-                            .highPrice(parseBigDecimal(o.highPrice()))
-                            .lowPrice(parseBigDecimal(o.lowPrice()))
-                            .closePrice(parseBigDecimal(o.closePrice()))
-                            .volume(parseLong(o.volume()))
-                            .tradingValue(parseBigDecimal(o.tradingValue()))
-                            .source("KIS")
-                            .build())
+                    .map(o -> {
+                        BigDecimal closePrice = parseBigDecimal(o.closePrice());
+                        Long volume = parseLong(o.volume());
+                        return StockPriceDaily.builder()
+                                .stockCode(stockCode)
+                                .tradeDate(LocalDate.parse(o.tradeDate(), KIS_DATE_FORMAT))
+                                .openPrice(parseBigDecimal(o.openPrice()))
+                                .highPrice(parseBigDecimal(o.highPrice()))
+                                .lowPrice(parseBigDecimal(o.lowPrice()))
+                                .closePrice(closePrice)
+                                .volume(volume)
+                                .tradingValue(calculateTradingValue(closePrice, volume))
+                                .source("KIS")
+                                .build();
+                    })
                     .filter(this::isConfirmedDailyPrice)
                     .collect(Collectors.toList());
 
@@ -229,5 +233,12 @@ public class MarketDataService {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private BigDecimal calculateTradingValue(BigDecimal closePrice, Long volume) {
+        if (closePrice == null || volume == null) {
+            return null;
+        }
+        return closePrice.multiply(BigDecimal.valueOf(volume));
     }
 }

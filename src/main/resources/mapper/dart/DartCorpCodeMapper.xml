@@ -34,5 +34,20 @@
         LIMIT 1
     </select>
 
+    <select id="searchInactiveListedCandidates" resultType="com.bowon.cpm.dart.domain.DartCorpCode">
+        SELECT d.corp_code, d.stock_code, d.corp_name, d.corp_eng_name, d.modify_date
+        FROM dart_corp_code d
+        LEFT JOIN stock_master sm ON sm.stock_code = d.stock_code
+        WHERE d.stock_code IS NOT NULL
+          AND d.stock_code != ''
+          AND (sm.stock_code IS NULL OR sm.is_active = 0)
+          AND (
+              d.corp_name LIKE CONCAT('%', #{query}, '%')
+              OR d.stock_code LIKE CONCAT('%', #{query}, '%')
+          )
+        ORDER BY d.corp_name, d.stock_code
+        LIMIT #{limit}
+    </select>
+
 </mapper>
 

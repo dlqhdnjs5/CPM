@@ -36,7 +36,7 @@ public class DartCollectScheduler {
 
         Long logId = logSupport.start(NAME);
         try {
-            List<StockMaster> stocks = stockMasterMapper.findAllWatched();
+            List<StockMaster> stocks = stockMasterMapper.findAllActive();
             int disclosureCount = 0;
             int eventCount = 0;
             int financialCount = 0;

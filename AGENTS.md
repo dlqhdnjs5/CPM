@@ -43,15 +43,11 @@ PAPER mode ledger rule:
 - REAL/KIS synced account, position, and daily P/L state must continue to use `account_balance`, `portfolio_position`, and `portfolio_profit_loss`.
 - `risk_check_result.trading_mode` must be written on every risk check. Orders must only accept a passed risk check from the current trading mode.
 
-Watchlist discovery rule:
+Stock universe rule:
 - `stock_master.is_active` means the stock is listed/usable.
-- `stock_master.is_watched` means the stock is in the active monitoring target set for data collection and AI decision generation.
-- `stock_candidate_score` stores daily deterministic candidate scores and AI/fallback selection status.
+- Automatic company discovery and promotion is removed.
+- Data collection and AI decision generation use active stocks or explicit stock-code APIs.
 - `stock_fundamental_indicator` stores calculated ROE, debt ratio, margins, growth rates, PER, PBR, PSR, and fundamental score.
-- Default watchlist limits are max watched stocks 20, max daily additions 5, and AI review candidates 30.
-- Default candidate prefetch limit is 30. Prefetch runs before scoring and fills minimal price/indicator/news/DART/financial data.
-- Candidate prefetch also collects DART stock quantity and calculates fundamental indicators when financial statement and price data are available.
-- Held stocks must stay watched; non-held watched stocks may be turned off when the max watched limit is exceeded.
 
 ## 개발 설계
 
@@ -854,7 +850,6 @@ AccountSyncScheduler
 DailyPriceSyncScheduler
 DartCollectScheduler
 NewsCollectScheduler
-WatchlistBuildScheduler
 ```
 
 ### 장중

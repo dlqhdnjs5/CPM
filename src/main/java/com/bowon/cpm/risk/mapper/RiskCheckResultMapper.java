@@ -4,6 +4,7 @@ import com.bowon.cpm.risk.domain.RiskCheckResult;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 @Mapper
@@ -17,5 +18,7 @@ public interface RiskCheckResultMapper {
             @Param("aiDecisionId") Long aiDecisionId,
             @Param("tradingMode") String tradingMode
     );
+
+    List<RiskCheckResult> findRecent(@Param("limit") int limit);
 }
 

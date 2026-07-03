@@ -26,9 +26,13 @@ import com.bowon.cpm.dart.service.DartFinancialService;
 import com.bowon.cpm.fundamental.domain.StockFundamentalIndicator;
 import com.bowon.cpm.fundamental.service.FundamentalIndicatorService;
 import com.bowon.cpm.market.domain.StockIndicatorDaily;
+import com.bowon.cpm.market.domain.MarketContext;
 import com.bowon.cpm.market.domain.StockPriceDaily;
+import com.bowon.cpm.market.domain.StockSupplyDemandDaily;
 import com.bowon.cpm.market.mapper.StockIndicatorDailyMapper;
 import com.bowon.cpm.market.mapper.StockPriceDailyMapper;
+import com.bowon.cpm.market.mapper.StockSupplyDemandDailyMapper;
+import com.bowon.cpm.market.service.MarketContextService;
 import com.bowon.cpm.macro.domain.MacroContext;
 import com.bowon.cpm.macro.service.MacroContextService;
 import com.bowon.cpm.news.domain.StockNews;
@@ -37,6 +41,7 @@ import com.bowon.cpm.paper.service.PaperPortfolioService;
 import com.bowon.cpm.portfolio.domain.PortfolioPosition;
 import com.bowon.cpm.portfolio.mapper.PortfolioPositionMapper;
 import com.bowon.cpm.stock.service.StockService;
+import com.bowon.cpm.stock.domain.StockMaster;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -83,6 +88,8 @@ public class AiDecisionService {
     private final StockService stockService;
     private final StockPriceDailyMapper stockPriceDailyMapper;
     private final StockIndicatorDailyMapper stockIndicatorDailyMapper;
+    private final StockSupplyDemandDailyMapper stockSupplyDemandDailyMapper;
+    private final MarketContextService marketContextService;
     private final StockNewsMapper stockNewsMapper;
     private final DartDisclosureMapper dartDisclosureMapper;
     private final DartMajorEventMapper dartMajorEventMapper;
@@ -133,7 +140,9 @@ public class AiDecisionService {
                     input.indicator, input.realtimeQuote,
                     input.weeklySummary, input.monthlySummary,
                     input.position, input.fundamentalIndicator,
+                    input.marketContext,
                     input.macroContext,
+                    input.supplyDemand,
                     tradingProperties.normalizedMode()
             );
 
@@ -282,6 +291,19 @@ public class AiDecisionService {
                 null, "기술적 지표 조회");
 
         // 재무 요약
+        d.supplyDemand = safeCall(
+                () -> stockSupplyDemandDailyMapper.findLatestByStockCode(stockCode).orElse(null),
+                null, "supply demand lookup");
+
+        StockMaster stockMaster = safeCall(
+                () -> stockService.findByStockCode(stockCode).orElse(null),
+                null, "stock master lookup");
+        d.marketContext = safeCall(
+                () -> marketContextService.latestContext(
+                        stockMaster != null ? stockMaster.getMarketType() : null,
+                        stockMaster != null ? stockMaster.getSectorName() : null),
+                null, "market context lookup");
+
         d.financialSummary = safeCall(() -> dartFinancialService.summarize(stockCode),
                 null, "재무 요약");
         d.fundamentalIndicator = safeCall(
@@ -465,5 +487,7 @@ public class AiDecisionService {
         AiPeriodicSummary weeklySummary;
         AiPeriodicSummary monthlySummary;
         MacroContext macroContext;
+        MarketContext marketContext;
+        StockSupplyDemandDaily supplyDemand;
     }
 }

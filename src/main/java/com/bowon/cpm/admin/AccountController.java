@@ -10,9 +10,12 @@ import com.bowon.cpm.portfolio.domain.PortfolioPosition;
 import com.bowon.cpm.portfolio.service.PortfolioService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
@@ -49,6 +52,15 @@ public class AccountController {
         return paperPortfolioService.findLatestAccountBalance(kisProperties.accountNo())
                 .map(ApiResponse::ok)
                 .orElse(ApiResponse.error("PAPER account balance not initialized"));
+    }
+
+    @PostMapping("/paper/balance/init")
+    public ApiResponse<PaperAccountBalance> initializePaperBalance(@RequestParam BigDecimal seedCash) {
+        String accountNo = kisProperties.accountNo();
+        paperPortfolioService.ensureAccountInitialized(accountNo, seedCash);
+        return paperPortfolioService.findLatestAccountBalance(accountNo)
+                .map(balance -> ApiResponse.ok("PAPER account balance initialized", balance))
+                .orElse(ApiResponse.error("PAPER account balance initialization failed"));
     }
 
     @GetMapping("/paper/positions")

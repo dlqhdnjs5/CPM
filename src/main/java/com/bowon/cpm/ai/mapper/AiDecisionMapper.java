@@ -1,6 +1,7 @@
 package com.bowon.cpm.ai.mapper;
 
 import com.bowon.cpm.ai.domain.AiDecision;
+import com.bowon.cpm.dashboard.domain.DashboardAiTradeHistoryItem;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -74,5 +75,12 @@ public interface AiDecisionMapper {
     );
 
     Optional<AiDecision> findLatestBuyForActivePosition(@Param("stockCode") String stockCode);
+
+    List<AiDecision> findRecent(@Param("limit") int limit);
+
+    List<DashboardAiTradeHistoryItem> findTradeHistory(
+            @Param("filter") String filter,
+            @Param("limit") int limit
+    );
 }
 

@@ -41,5 +41,14 @@
         LIMIT 1
     </select>
 
+    <select id="findRecent" resultType="com.bowon.cpm.risk.domain.RiskCheckResult">
+        SELECT id, ai_decision_id, policy_code, trading_mode, account_no, stock_code,
+               passed, fail_reason, available_cash, expected_order_amount,
+               max_position_amount, current_position_amount, confidence, risk_reward_ratio, checked_at
+        FROM risk_check_result
+        ORDER BY checked_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>
 

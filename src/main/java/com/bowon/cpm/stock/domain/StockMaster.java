@@ -27,7 +27,6 @@ public class StockMaster {
     private String corpCode;
     /** 활성 여부 */
     private Boolean isActive;
-    private Boolean isWatched;
     /** 상장일 */
     private LocalDate listedDate;
     /** 상폐일 */

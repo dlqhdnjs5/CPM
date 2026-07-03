@@ -26,7 +26,6 @@ class StockMasterMapperTest {
                 .stockName("Mapper Test")
                 .marketType("KOSDAQ")
                 .isActive(true)
-                .isWatched(false)
                 .build());
 
         mapper.upsert(StockMaster.builder()
@@ -34,7 +33,6 @@ class StockMasterMapperTest {
                 .stockName("Mapper Test Renamed")
                 .marketType("UNKNOWN")
                 .isActive(true)
-                .isWatched(false)
                 .build());
 
         assertThat(mapper.findByStockCode("999981")).isPresent()

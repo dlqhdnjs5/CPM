@@ -3,8 +3,10 @@ package com.bowon.cpm.ai.prompt;
 import com.bowon.cpm.feedback.domain.AiFeedback;
 import com.bowon.cpm.feedback.domain.AiPeriodicSummary;
 import com.bowon.cpm.fundamental.domain.StockFundamentalIndicator;
+import com.bowon.cpm.market.domain.MarketContext;
 import com.bowon.cpm.market.domain.StockIndicatorDaily;
 import com.bowon.cpm.market.domain.StockPriceDaily;
+import com.bowon.cpm.market.domain.StockSupplyDemandDaily;
 import com.bowon.cpm.macro.domain.MacroContext;
 import com.bowon.cpm.news.domain.StockNews;
 import com.bowon.cpm.portfolio.domain.PortfolioPosition;
@@ -42,7 +44,12 @@ class AiDecisionPromptBuilderTest {
         assertThat(prompt).contains("market-wide liquidity");
         assertThat(normalizedPrompt).contains("stock.currentPrice as the market price source of truth");
         assertThat(normalizedPrompt).contains("recommendedPortfolioWeight must be 0.0");
-        assertThat(normalizedPrompt).contains("riskReward.riskRewardRatio is below 1.0");
+        assertThat(normalizedPrompt).contains("riskReward.riskRewardRatio is a reference ratio");
+        assertThat(normalizedPrompt).contains("BUY is still allowed");
+        assertThat(normalizedPrompt).contains("breakout momentum");
+        assertThat(normalizedPrompt).contains("0.03 to 0.10");
+        assertThat(normalizedPrompt).contains("priceDataQuality.quality is MEDIUM");
+        assertThat(normalizedPrompt).contains("Missing supplyDemand should be neutral");
         assertThat(normalizedPrompt).contains("do not infer news sentiment");
         assertThat(normalizedPrompt).contains("do not infer foreign, institution");
         assertThat(normalizedPrompt).contains("largeCurrentMove is true");
@@ -119,7 +126,61 @@ class AiDecisionPromptBuilderTest {
         assertThat(root.path("technical").path("macdDirection").asText()).isEqualTo("POSITIVE");
         assertThat(root.path("newsSummary").path("positiveCount").asInt()).isEqualTo(1);
         assertThat(root.path("fundamental").path("per").decimalValue()).isEqualByComparingTo("12.5");
+        assertThat(root.path("riskReward").path("basis").asText())
+                .isEqualTo("RECENT_SUPPORT_RESISTANCE_REFERENCE");
+        assertThat(root.path("riskReward").path("breakoutTargetAllowed").asBoolean()).isTrue();
         assertThat(root.path("strategyFeedback").path("recentModelBias").asText()).isEqualTo("HOLD_BIASED");
+    }
+
+    @Test
+    @DisplayName("latest confirmed supply demand is included in prompt")
+    void supply_demand_is_included() throws Exception {
+        String prompt = builder.buildUserPrompt(
+                "005930", "Samsung Electronics",
+                sampleDailyPrices(), List.of(), List.of(),
+                BigDecimal.ZERO, BigDecimal.ZERO,
+                List.of(), null, List.of(),
+                StockIndicatorDaily.builder()
+                        .tradeDate(LocalDate.of(2026, 6, 8))
+                        .ma5(new BigDecimal("100000"))
+                        .ma20(new BigDecimal("99000"))
+                        .rsi14(new BigDecimal("50"))
+                        .build(),
+                new BigDecimal("101000"),
+                null, null,
+                null, null,
+                MarketContext.builder()
+                        .kospiChangeRate(new BigDecimal("1.2300"))
+                        .kosdaqChangeRate(new BigDecimal("-0.4500"))
+                        .sectorChangeRate(new BigDecimal("2.1000"))
+                        .marketType("KOSPI")
+                        .sectorName("반도체")
+                        .build(),
+                null,
+                StockSupplyDemandDaily.builder()
+                        .stockCode("005930")
+                        .tradeDate(LocalDate.of(2026, 6, 10))
+                        .foreignNetBuyAmount(new BigDecimal("1200000000"))
+                        .institutionNetBuyAmount(new BigDecimal("800000000"))
+                        .individualNetBuyAmount(new BigDecimal("-2000000000"))
+                        .foreignNetBuyQty(300000L)
+                        .institutionNetBuyQty(200000L)
+                        .individualNetBuyQty(-500000L)
+                        .build(),
+                "PAPER"
+        );
+
+        JsonNode root = parseInputJson(prompt);
+        JsonNode supplyDemand = root.path("supplyDemand");
+        JsonNode marketContext = root.path("marketContext");
+
+        assertThat(marketContext.path("kospiChangeRate").decimalValue()).isEqualByComparingTo("1.2300");
+        assertThat(marketContext.path("sectorName").asText()).isEqualTo("반도체");
+        assertThat(supplyDemand.path("tradeDate").asText()).isEqualTo("2026-06-10");
+        assertThat(supplyDemand.path("period").asText()).isEqualTo("LATEST_CONFIRMED");
+        assertThat(supplyDemand.path("amountUnit").asText()).isEqualTo("KRW");
+        assertThat(supplyDemand.path("foreignNetBuyAmount").decimalValue()).isEqualByComparingTo("1200000000");
+        assertThat(supplyDemand.path("shortSellingAmount").isNull()).isTrue();
     }
 
     @Test
@@ -246,7 +307,9 @@ class AiDecisionPromptBuilderTest {
                 new BigDecimal("101000"),
                 null, null,
                 null, null,
+                null,
                 macroContext,
+                null,
                 "PAPER"
         );
 

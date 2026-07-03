@@ -29,7 +29,7 @@ public class DailyPriceSyncScheduler {
         if (!logSupport.isWeekday() || logSupport.isAlreadyRunning(NAME)) return;
         Long logId = logSupport.start(NAME);
         try {
-            List<StockMaster> stocks = stockMasterMapper.findAllWatched();
+            List<StockMaster> stocks = stockMasterMapper.findAllActive();
             int total = 0;
             for (StockMaster stock : stocks) {
                 try {

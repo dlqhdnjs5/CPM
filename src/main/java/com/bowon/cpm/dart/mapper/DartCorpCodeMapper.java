@@ -18,5 +18,9 @@ public interface DartCorpCodeMapper {
 
     /** corp_code로 조회 */
     Optional<DartCorpCode> findByCorpCode(String corpCode);
+    List<DartCorpCode> searchInactiveListedCandidates(
+            @Param("query") String query,
+            @Param("limit") int limit
+    );
 }
 

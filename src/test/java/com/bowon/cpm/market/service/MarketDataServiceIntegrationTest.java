@@ -77,6 +77,7 @@ class MarketDataServiceIntegrationTest {
                 .containsExactly(LocalDate.of(2026, 6, 9));
         assertThat(prices.get(0).getClosePrice()).isEqualByComparingTo(new BigDecimal("950"));
         assertThat(prices.get(0).getVolume()).isEqualTo(1000L);
+        assertThat(prices.get(0).getTradingValue()).isEqualByComparingTo("950000");
     }
 
     @Test
@@ -112,6 +113,7 @@ class MarketDataServiceIntegrationTest {
         assertThat(prices.get(0).getClosePrice()).isEqualByComparingTo(new BigDecimal("1200"));
         assertThat(prices.get(0).getHighPrice()).isEqualByComparingTo(new BigDecimal("1300"));
         assertThat(prices.get(0).getVolume()).isEqualTo(200L);
+        assertThat(prices.get(0).getTradingValue()).isEqualByComparingTo("240000");
     }
 
     private void setClock(LocalDateTime dateTime) {

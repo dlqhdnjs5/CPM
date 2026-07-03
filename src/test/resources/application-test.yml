@@ -19,12 +19,9 @@ cpm:
   trading:
     mode: PAPER
     enabled: false
-n  watchlist:
-    max-watched-stocks: 20
-    max-daily-additions: 5
-    ai-candidate-limit: 30
-    source-candidate-limit: 500
-    prefetch-candidate-limit: 30
+  liquidity:
+    min-average-volume20: 100000
+    min-average-trading-value20: 3000000000
 
 external:
   kis:

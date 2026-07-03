@@ -22,14 +22,18 @@ import com.bowon.cpm.dart.service.DartFinancialService;
 import com.bowon.cpm.feedback.mapper.AiFeedbackMapper;
 import com.bowon.cpm.feedback.mapper.AiPeriodicSummaryMapper;
 import com.bowon.cpm.fundamental.service.FundamentalIndicatorService;
+import com.bowon.cpm.market.service.MarketContextService;
 import com.bowon.cpm.macro.service.MacroContextService;
 import com.bowon.cpm.market.mapper.StockIndicatorDailyMapper;
 import com.bowon.cpm.market.mapper.StockPriceDailyMapper;
+import com.bowon.cpm.market.mapper.StockSupplyDemandDailyMapper;
+import com.bowon.cpm.market.domain.MarketContext;
 import com.bowon.cpm.news.mapper.StockNewsMapper;
 import com.bowon.cpm.paper.domain.PaperAccountBalance;
 import com.bowon.cpm.paper.service.PaperPortfolioService;
 import com.bowon.cpm.portfolio.mapper.PortfolioPositionMapper;
 import com.bowon.cpm.stock.service.StockService;
+import com.bowon.cpm.stock.domain.StockMaster;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -65,12 +69,14 @@ class AiDecisionServiceTest {
     @Mock StockService stockService;
     @Mock StockPriceDailyMapper stockPriceDailyMapper;
     @Mock StockIndicatorDailyMapper stockIndicatorDailyMapper;
+    @Mock StockSupplyDemandDailyMapper stockSupplyDemandDailyMapper;
     @Mock StockNewsMapper stockNewsMapper;
     @Mock DartDisclosureMapper dartDisclosureMapper;
     @Mock DartMajorEventMapper dartMajorEventMapper;
     @Mock DartFinancialService dartFinancialService;
     @Mock FundamentalIndicatorService fundamentalIndicatorService;
     @Mock PortfolioPositionMapper portfolioPositionMapper;
+    @Mock MarketContextService marketContextService;
     @Mock MacroContextService macroContextService;
     @Mock AiDecisionMapper decisionMapper;
     @Mock ExternalApiCallLogMapper externalApiCallLogMapper;
@@ -102,6 +108,8 @@ class AiDecisionServiceTest {
                 stockService,
                 stockPriceDailyMapper,
                 stockIndicatorDailyMapper,
+                stockSupplyDemandDailyMapper,
+                marketContextService,
                 stockNewsMapper,
                 dartDisclosureMapper,
                 dartMajorEventMapper,
@@ -120,7 +128,12 @@ class AiDecisionServiceTest {
     @Test
     @DisplayName("PAPER mode uses paper account balance in AI prompt and does not query KIS balance")
     void paperModeUsesPaperBalanceForPrompt() {
-        when(stockService.findByStockCode("005930")).thenReturn(Optional.empty());
+        when(stockService.findByStockCode("005930")).thenReturn(Optional.of(StockMaster.builder()
+                .stockCode("005930")
+                .stockName("삼성전자")
+                .marketType("KOSPI")
+                .sectorName("반도체")
+                .build()));
         when(stockPriceDailyMapper.findByStockCodeAndDateRange(anyString(), any(), any()))
                 .thenReturn(Collections.emptyList());
         when(stockNewsMapper.findByStockCodeAndPublishedAfter(anyString(), any(), any(Integer.class)))
@@ -136,6 +149,13 @@ class AiDecisionServiceTest {
                 .thenReturn(Collections.emptyList());
         when(aiPeriodicSummaryMapper.findLatestBySummaryType(anyString())).thenReturn(Optional.empty());
         when(dartFinancialService.summarize("005930")).thenReturn(null);
+        MarketContext marketContext = MarketContext.builder()
+                .kospiChangeRate(new BigDecimal("1.2000"))
+                .sectorChangeRate(new BigDecimal("2.3000"))
+                .marketType("KOSPI")
+                .sectorName("반도체")
+                .build();
+        when(marketContextService.latestContext("KOSPI", "반도체")).thenReturn(marketContext);
 
         when(tradingProperties.isPaperMode()).thenReturn(true);
         when(tradingProperties.normalizedMode()).thenReturn("PAPER");
@@ -162,6 +182,8 @@ class AiDecisionServiceTest {
                     .isEqualByComparingTo(new BigDecimal("1200000"));
             assertThat(invocation.getArgument(6, BigDecimal.class))
                     .isEqualByComparingTo(new BigDecimal("900000"));
+            assertThat(invocation.getArgument(16, MarketContext.class))
+                    .isSameAs(marketContext);
             return "user";
         }).when(promptBuilder).buildUserPrompt(
                 anyString(), anyString(),
@@ -169,7 +191,7 @@ class AiDecisionServiceTest {
                 any(BigDecimal.class), any(BigDecimal.class),
                 any(List.class), any(), any(List.class),
                 any(), any(BigDecimal.class), any(), any(),
-                any(), any(), any(), anyString()
+                any(), any(), any(), any(), any(), anyString()
         );
 
         when(openAiProperties.modelDecision()).thenReturn("gpt-test");

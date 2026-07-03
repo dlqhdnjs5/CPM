@@ -34,5 +34,17 @@
           AND started_at &lt; #{timeoutBefore}
     </update>
 
+    <select id="findRecent" resultType="com.bowon.cpm.common.domain.SchedulerExecutionLog">
+        SELECT id,
+               scheduler_name,
+               execution_status AS status,
+               message AS execution_message,
+               started_at,
+               ended_at AS finished_at
+        FROM scheduler_execution_log
+        ORDER BY started_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>
 

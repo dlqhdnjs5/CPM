@@ -39,14 +39,14 @@ public class TechnicalIndicatorService {
     }
 
     @Transactional
-    public int calculateAllWatched() {
+    public int calculateAllActiveForScheduler() {
         int saved = 0;
-        for (StockMaster stock : stockMasterMapper.findAllWatched()) {
+        for (StockMaster stock : stockMasterMapper.findAllActive()) {
             if (calculateForStock(stock.getStockCode()) != null) {
                 saved++;
             }
         }
-        log.info("[Indicator] watched stock indicator calculation completed: saved={}", saved);
+        log.info("[Indicator] active stock indicator calculation completed: saved={}", saved);
         return saved;
     }
 

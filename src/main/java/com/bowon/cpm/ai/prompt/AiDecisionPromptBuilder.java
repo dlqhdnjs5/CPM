@@ -6,7 +6,9 @@ import com.bowon.cpm.feedback.domain.AiFeedback;
 import com.bowon.cpm.feedback.domain.AiPeriodicSummary;
 import com.bowon.cpm.fundamental.domain.StockFundamentalIndicator;
 import com.bowon.cpm.market.domain.StockIndicatorDaily;
+import com.bowon.cpm.market.domain.MarketContext;
 import com.bowon.cpm.market.domain.StockPriceDaily;
+import com.bowon.cpm.market.domain.StockSupplyDemandDaily;
 import com.bowon.cpm.macro.domain.MacroContext;
 import com.bowon.cpm.news.domain.StockNews;
 import com.bowon.cpm.portfolio.domain.PortfolioPosition;
@@ -52,19 +54,28 @@ public class AiDecisionPromptBuilder {
                 FUNDAMENTAL, SUPPLY_DEMAND, POSITIVE, NEGATIVE, and NEUTRAL.
 
                 Use the provided inputJson as the source of truth. Missing fields are null.
-                Be conservative: when true data quality is LOW, important data is missing, or
-                the evidence is mixed, return HOLD with lower confidence.
+                Be risk-aware, but do not default to HOLD only because some secondary data is
+                missing. When true data quality is LOW, avoid action. When quality is MEDIUM,
+                evaluate whether price, trend, news, supply/demand, risk-reward, and liquidity
+                still justify a cautious decision with lower confidence and smaller weight.
 
                 Decision rules:
                 - decision must be one of BUY, SELL, HOLD.
                 - Return only fields defined in the required response schema. Do not add fields
                   outside the schema.
+                - The purpose is to find tradable opportunities, not to avoid every imperfect
+                  setup. If upside evidence is meaningfully stronger than downside evidence,
+                  prefer a small cautious BUY over HOLD unless a hard block below applies.
                 - Use inputJson.stock.currentPrice as the market price source of truth.
                 - If inputJson.stock.currentPrice and inputJson.position.currentPrice differ,
                   prefer inputJson.stock.currentPrice for all decision, target, stop-loss,
                   risk-reward, and portfolio-weight calculations.
                 - Use inputJson.position.averagePrice only for position profit/loss context.
                 - If inputJson.priceDataQuality.quality is LOW, do not return BUY or SELL.
+                - If inputJson.priceDataQuality.quality is MEDIUM, BUY is allowed when the
+                  available evidence is meaningfully positive, risk-reward is acceptable,
+                  liquidity is not weak, and no major negative event is present. Use lower
+                  confidence and smaller recommendedPortfolioWeight than a HIGH-quality setup.
                 - If inputJson.position.isHolding is false, do not return SELL.
                 - If inputJson.position.isHolding is true, evaluate HOLD, SELL, or cautious additional BUY.
                 - If decision is HOLD, recommendedPortfolioWeight must be 0.0.
@@ -73,29 +84,45 @@ public class AiDecisionPromptBuilder {
                 - For HOLD, stopLossPrice should use inputJson.riskReward.recentSupportPrice
                   if available, otherwise null.
                 - For HOLD, targetPrice and stopLossPrice are reference levels only, not order instructions.
-                - If inputJson.riskReward.riskRewardRatio is below 1.0, avoid BUY unless
-                  priceDataQuality.quality is HIGH and available technical, news, supply/demand,
-                  and risk-reward signals are strongly aligned. If supplyDemand is unavailable,
-                  do not count it as aligned.
+                - inputJson.riskReward.riskRewardRatio is a reference ratio based on recent
+                  support/resistance, not an absolute BUY blocker. If it is below 1.0, reduce
+                  confidence and recommendedPortfolioWeight, but BUY is still allowed when
+                  priceDataQuality.quality is not LOW and technical momentum, news/fundamentals,
+                  marketContext, and liquidity are supportive. In breakout situations, you may
+                  propose a targetPrice above recentResistancePrice if the analysis explains why.
                 - Do not treat a large current-vs-latest-close move as poor data quality.
                 - Interpret marketMove.currentVsLatestCloseRate as market movement: momentum,
                   overextension, breakdown, or rebound based on volume, trend, news,
                   support/resistance, and risk-reward.
                 - If marketMove.latestVolumeAbnormal is true, interpret it as a liquidity or
-                  momentum risk signal, not as data corruption by itself.
-                - If marketMove.largeCurrentMove is true, lower confidence unless volume,
-                  trend, news, support/resistance, and risk-reward support the move.
+                  momentum risk signal, not as data corruption by itself. Low relative volume
+                  should lower confidence, but it is not a standalone HOLD reason for highly
+                  liquid large-cap stocks.
+                - If marketMove.largeCurrentMove is true, decide whether it is overextension or
+                  breakout momentum. If currentPrice is above short/medium moving averages and
+                  news/fundamentals are supportive, a small BUY is allowed even after a large move.
                 - Use inputJson.macroContext only as a market-wide liquidity, interest-rate,
                   exchange-rate, and risk appetite modifier. It can lower confidence or make
                   a BUY more cautious, but it must not override stock-specific evidence by itself.
                 - If technical indicators are mostly null, technical analysis must be cautious
-                  and confidence should be lowered.
+                  and confidence should be lowered, but a BUY may still be considered when
+                  price action, news, disclosures, fundamentals, marketContext, and risk-reward
+                  are aligned.
                 - If newsSummary.topNews is empty and weightedSentimentScore is null, do not
                   infer news sentiment.
                 - If supplyDemand fields are null, do not infer foreign, institution,
-                  individual, or short-selling flow.
-                - Positive news alone is not enough for BUY when technical trend, supply/demand, or data quality is weak.
-                - Good fundamentals with weak short-term data should usually be HOLD.
+                  individual, or short-selling flow. Missing supplyDemand should be neutral,
+                  not automatically bearish.
+                - supplyDemand is latest confirmed investor flow, not real-time intraday flow.
+                  Use it as supporting evidence only.
+                - Institution net selling is a warning, not an automatic HOLD. Weigh it against
+                  foreign/individual flow, price trend, liquidity, news, and fundamentals.
+                - Positive news alone is not enough for BUY when technical trend, liquidity, risk-reward, or data quality is weak.
+                - Good fundamentals with weak short-term data should usually be HOLD, but
+                  improving technicals, supportive marketContext, and acceptable risk-reward
+                  can justify a small cautious BUY.
+                - When decision is BUY under mixed evidence, keep recommendedPortfolioWeight
+                  small, usually 0.03 to 0.10, and explain the key invalidation condition.
                 - Use disclosureSummary event flags instead of over-weighting repeated disclosure titles.
                 - recommendedPortfolioWeight must stay within account.totalAsset and account.availableCash constraints.
                 - If a field is unavailable, keep the corresponding analysis cautious rather than inventing data.
@@ -119,7 +146,9 @@ public class AiDecisionPromptBuilder {
             AiPeriodicSummary monthlySummary,
             PortfolioPosition position,
             StockFundamentalIndicator fundamentalIndicator,
+            MarketContext marketContext,
             MacroContext macroContext,
+            StockSupplyDemandDaily supplyDemand,
             String tradingMode
     ) {
         Map<String, Object> inputJson = buildInputJson(
@@ -139,7 +168,9 @@ public class AiDecisionPromptBuilder {
                 monthlySummary,
                 position,
                 fundamentalIndicator,
+                marketContext,
                 macroContext,
+                supplyDemand,
                 tradingMode
         );
 
@@ -168,7 +199,7 @@ public class AiDecisionPromptBuilder {
         return buildUserPrompt(stockCode, stockName, dailyPrices, newsList, disclosures,
                 totalAsset, availableCash, recentFeedbacks, financialSummary, majorEvents,
                 indicator, realtimeQuote, weeklySummary, monthlySummary,
-                position, fundamentalIndicator, null, tradingMode);
+                position, fundamentalIndicator, null, null, null, tradingMode);
     }
 
     public String buildUserPrompt(
@@ -190,7 +221,7 @@ public class AiDecisionPromptBuilder {
         return buildUserPrompt(stockCode, stockName, dailyPrices, newsList, disclosures,
                 totalAsset, availableCash, recentFeedbacks, financialSummary, majorEvents,
                 indicator, realtimeQuote, weeklySummary, monthlySummary,
-                null, null, null, null);
+                null, null, null, null, null, null);
     }
 
     public String buildUserPrompt(
@@ -229,7 +260,9 @@ public class AiDecisionPromptBuilder {
             AiPeriodicSummary monthlySummary,
             PortfolioPosition position,
             StockFundamentalIndicator fundamentalIndicator,
+            MarketContext marketContext,
             MacroContext macroContext,
+            StockSupplyDemandDaily supplyDemand,
             String tradingMode
     ) {
         List<StockPriceDaily> effectiveDailyPrices = effectiveDailyPrices(dailyPrices, realtimeQuote);
@@ -254,11 +287,11 @@ public class AiDecisionPromptBuilder {
                 excludedLatestDailyPrice
         ));
         root.put("marketMove", marketMoveSection(currentVsLatestCloseRate, volumeRatio20));
-        root.put("marketContext", emptyMarketContext());
+        root.put("marketContext", marketContextSection(marketContext));
         root.put("macroContext", macroContextSection(macroContext));
         root.put("newsSummary", newsSummarySection(newsList));
         root.put("disclosureSummary", disclosureSummarySection(disclosures, majorEvents));
-        root.put("supplyDemand", emptySupplyDemand());
+        root.put("supplyDemand", supplyDemandSection(supplyDemand));
         root.put("fundamental", fundamentalSection(fundamentalIndicator, financialSummary));
         root.put("riskReward", riskRewardSection(effectiveDailyPrices, currentPrice));
         root.put("strategyFeedback", strategyFeedbackSection(recentFeedbacks, weeklySummary, monthlySummary));
@@ -357,13 +390,15 @@ public class AiDecisionPromptBuilder {
         return section;
     }
 
-    private Map<String, Object> emptyMarketContext() {
+    private Map<String, Object> marketContextSection(MarketContext marketContext) {
         Map<String, Object> section = orderedMap();
-        section.put("kospiChangeRate", null);
-        section.put("kosdaqChangeRate", null);
-        section.put("sectorChangeRate", null);
-        section.put("soxIndexChangeRate", null);
-        section.put("usdKrwChangeRate", null);
+        section.put("kospiChangeRate", marketContext != null ? marketContext.getKospiChangeRate() : null);
+        section.put("kosdaqChangeRate", marketContext != null ? marketContext.getKosdaqChangeRate() : null);
+        section.put("sectorChangeRate", marketContext != null ? marketContext.getSectorChangeRate() : null);
+        section.put("soxIndexChangeRate", marketContext != null ? marketContext.getSoxIndexChangeRate() : null);
+        section.put("usdKrwChangeRate", marketContext != null ? marketContext.getUsdKrwChangeRate() : null);
+        section.put("marketType", marketContext != null ? marketContext.getMarketType() : null);
+        section.put("sectorName", marketContext != null ? marketContext.getSectorName() : null);
         return section;
     }
 
@@ -522,11 +557,18 @@ public class AiDecisionPromptBuilder {
         return section;
     }
 
-    private Map<String, Object> emptySupplyDemand() {
+    private Map<String, Object> supplyDemandSection(StockSupplyDemandDaily supplyDemand) {
         Map<String, Object> section = orderedMap();
-        section.put("foreignNetBuyAmount", null);
-        section.put("institutionNetBuyAmount", null);
-        section.put("individualNetBuyAmount", null);
+        section.put("tradeDate", supplyDemand != null && supplyDemand.getTradeDate() != null
+                ? supplyDemand.getTradeDate().format(DateTimeFormatter.ISO_LOCAL_DATE) : null);
+        section.put("period", supplyDemand != null ? "LATEST_CONFIRMED" : null);
+        section.put("amountUnit", "KRW");
+        section.put("foreignNetBuyAmount", supplyDemand != null ? supplyDemand.getForeignNetBuyAmount() : null);
+        section.put("institutionNetBuyAmount", supplyDemand != null ? supplyDemand.getInstitutionNetBuyAmount() : null);
+        section.put("individualNetBuyAmount", supplyDemand != null ? supplyDemand.getIndividualNetBuyAmount() : null);
+        section.put("foreignNetBuyQty", supplyDemand != null ? supplyDemand.getForeignNetBuyQty() : null);
+        section.put("institutionNetBuyQty", supplyDemand != null ? supplyDemand.getInstitutionNetBuyQty() : null);
+        section.put("individualNetBuyQty", supplyDemand != null ? supplyDemand.getIndividualNetBuyQty() : null);
         section.put("shortSellingAmount", null);
         section.put("shortSellingRatio", null);
         return section;
@@ -570,6 +612,10 @@ public class AiDecisionPromptBuilder {
         BigDecimal expectedLossRate = calculateSignedRate(support, currentPrice);
 
         Map<String, Object> section = orderedMap();
+        section.put("basis", "RECENT_SUPPORT_RESISTANCE_REFERENCE");
+        section.put("breakoutTargetAllowed", true);
+        section.put("interpretationNote",
+                "riskRewardRatio is a reference from recent support/resistance; in breakout momentum, targetPrice may exceed recentResistancePrice if justified.");
         section.put("expectedReturnRate", expectedReturnRate);
         section.put("expectedLossRate", expectedLossRate);
         section.put("riskRewardRatio", riskRewardRatio(expectedReturnRate, expectedLossRate));

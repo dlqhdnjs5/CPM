@@ -21,6 +21,9 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -76,5 +79,37 @@ class MarketDataServiceTest {
         service.fetchAndSaveDailyPrices("005930");
 
         verify(stockService).upsertStockMaster("005930", "Samsung Electronics", "UNKNOWN");
+    }
+
+    @Test
+    @DisplayName("Daily price sync calculates trading value from close price and volume")
+    void dailyPriceSyncCalculatesTradingValue() {
+        when(dailyPriceClient.getDailyPrice("005930", "D")).thenReturn(new KisDailyPriceResponse(
+                "0",
+                "OK",
+                "success",
+                List.of(new KisDailyPriceResponse.DailyOutput(
+                        "20260605",
+                        "69000",
+                        "71000",
+                        "68000",
+                        "70000",
+                        "123456",
+                        null
+                ))
+        ));
+        when(brokerClient.getCurrentPrice("005930")).thenReturn(StockQuoteResult.builder()
+                .stockCode("005930")
+                .stockName("Samsung Electronics")
+                .currentPrice(new BigDecimal("70000"))
+                .build());
+
+        service.fetchAndSaveDailyPrices("005930");
+
+        var captor = forClass(List.class);
+        verify(stockPriceDailyMapper).insertBatch(captor.capture());
+        @SuppressWarnings("unchecked")
+        List<com.bowon.cpm.market.domain.StockPriceDaily> saved = captor.getValue();
+        assertThat(saved.get(0).getTradingValue()).isEqualByComparingTo("8641920000");
     }
 }

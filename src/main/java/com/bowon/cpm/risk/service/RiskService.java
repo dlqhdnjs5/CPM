@@ -5,12 +5,14 @@ import com.bowon.cpm.ai.mapper.AiDecisionMapper;
 import com.bowon.cpm.broker.BrokerClient;
 import com.bowon.cpm.broker.dto.AccountBalanceResult;
 import com.bowon.cpm.broker.kis.KisProperties;
+import com.bowon.cpm.common.config.LiquidityProperties;
 import com.bowon.cpm.common.config.TradingProperties;
 import com.bowon.cpm.order.trigger.SellTrigger;
 import com.bowon.cpm.paper.service.PaperPortfolioService;
 import com.bowon.cpm.portfolio.domain.PortfolioPosition;
 import com.bowon.cpm.portfolio.mapper.PortfolioPositionMapper;
 import com.bowon.cpm.portfolio.service.PortfolioService;
+import com.bowon.cpm.market.mapper.StockPriceDailyMapper;
 import com.bowon.cpm.risk.domain.RiskCheckResult;
 import com.bowon.cpm.risk.domain.RiskPolicyConfig;
 import com.bowon.cpm.risk.mapper.RiskCheckResultMapper;
@@ -23,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -42,6 +45,8 @@ public class RiskService {
     private final BrokerClient brokerClient;
     private final TradingProperties tradingProperties;
     private final PortfolioService portfolioService;
+    private final LiquidityProperties liquidityProperties;
+    private final StockPriceDailyMapper stockPriceDailyMapper;
 
     @Transactional
     public RiskCheckResult checkAndSave(Long aiDecisionId) {
@@ -80,13 +85,16 @@ public class RiskService {
                     SellTrigger.AI_DECISION
             );
         } else {
-            failReason = riskManager.check(
+            failReason = liquidityFailReason(decision);
+            if (failReason == null) {
+                failReason = riskManager.check(
                     decision,
                     policy,
                     balance.availableCash(),
                     balance.totalAsset(),
                     currentPositionAmount
-            );
+                );
+            }
         }
         boolean passed = failReason == null;
 
@@ -150,5 +158,42 @@ public class RiskService {
     }
 
     private record BalanceContext(BigDecimal availableCash, BigDecimal totalAsset) {
+    }
+
+    private String liquidityFailReason(AiDecision decision) {
+        if (!"BUY".equals(decision.getDecision())) {
+            return null;
+        }
+        Map<String, Object> averages = stockPriceDailyMapper.findRecentLiquidityAverage(decision.getStockCode(), 20);
+        BigDecimal averageVolume = toBigDecimal(averages != null ? averages.get("average_volume") : null);
+        BigDecimal averageTradingValue = toBigDecimal(averages != null ? averages.get("average_trading_value") : null);
+
+        BigDecimal minVolume = BigDecimal.valueOf(liquidityProperties.minAverageVolume20());
+        BigDecimal minTradingValue = BigDecimal.valueOf(liquidityProperties.minAverageTradingValue20());
+        if (averageVolume == null || averageTradingValue == null) {
+            return "유동성 데이터 부족: 최근 20거래일 평균 거래량/거래대금 없음";
+        }
+        if (averageVolume.compareTo(minVolume) < 0) {
+            return String.format("유동성 부족: 20일 평균 거래량 %.0f < 기준 %.0f",
+                    averageVolume, minVolume);
+        }
+        if (averageTradingValue.compareTo(minTradingValue) < 0) {
+            return String.format("유동성 부족: 20일 평균 거래대금 %.0f < 기준 %.0f",
+                    averageTradingValue, minTradingValue);
+        }
+        return null;
+    }
+
+    private BigDecimal toBigDecimal(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof BigDecimal decimal) {
+            return decimal;
+        }
+        if (value instanceof Number number) {
+            return new BigDecimal(number.toString());
+        }
+        return new BigDecimal(value.toString());
     }
 }

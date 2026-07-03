@@ -72,9 +72,9 @@ public class FundamentalIndicatorService {
     }
 
     @Transactional
-    public int calculateAndSaveAllWatched() {
+    public int calculateAndSaveAllActive() {
         int count = 0;
-        for (StockMaster stock : stockMasterMapper.findAllWatched()) {
+        for (StockMaster stock : stockMasterMapper.findAllActive()) {
             try {
                 calculateAndSave(stock.getStockCode());
                 count++;

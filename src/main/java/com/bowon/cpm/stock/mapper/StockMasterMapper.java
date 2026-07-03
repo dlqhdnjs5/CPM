@@ -18,16 +18,10 @@ public interface StockMasterMapper {
     /** 활성 종목 전체 조회 */
     List<StockMaster> findAllActive();
 
-    List<StockMaster> findAllWatched();
-
-    int countWatched();
-
-    int updateWatched(@Param("stockCode") String stockCode, @Param("isWatched") boolean isWatched);
+    List<StockMaster> findAll();
 
     int updateMarketType(@Param("stockCode") String stockCode, @Param("marketType") String marketType);
 
-    int markHeldPositionsWatched(@Param("accountNo") String accountNo);
-
-    int unwatchOverflowNonHeld(@Param("accountNo") String accountNo, @Param("limit") int limit);
+    int updateActive(@Param("stockCode") String stockCode, @Param("isActive") boolean isActive);
 }
 

@@ -17,8 +17,7 @@
             sector_name,
             industry_name,
             corp_code,
-            is_active,
-            is_watched
+            is_active
         ) VALUES (
             #{stockCode},
             #{stockName},
@@ -26,8 +25,7 @@
             #{sectorName},
             #{industryName},
             #{corpCode},
-            #{isActive},
-            COALESCE(#{isWatched}, 0)
+            #{isActive}
         )
         ON DUPLICATE KEY UPDATE
             stock_name    = VALUES(stock_name),
@@ -53,7 +51,6 @@
             industry_name,
             corp_code,
             is_active,
-            is_watched,
             listed_date,
             delisted_date,
             created_at,
@@ -71,7 +68,6 @@
             industry_name,
             corp_code,
             is_active,
-            is_watched,
             listed_date,
             delisted_date,
             created_at,
@@ -81,7 +77,7 @@
         ORDER BY stock_code
     </select>
 
-    <select id="findAllWatched" resultType="com.bowon.cpm.stock.domain.StockMaster">
+    <select id="findAll" resultType="com.bowon.cpm.stock.domain.StockMaster">
         SELECT
             stock_code,
             stock_name,
@@ -90,30 +86,13 @@
             industry_name,
             corp_code,
             is_active,
-            is_watched,
             listed_date,
             delisted_date,
             created_at,
             updated_at
         FROM stock_master
-        WHERE is_active = 1
-          AND is_watched = 1
-        ORDER BY stock_code
+        ORDER BY stock_name, stock_code
     </select>
-
-    <select id="countWatched" resultType="int">
-        SELECT COUNT(*)
-        FROM stock_master
-        WHERE is_active = 1
-          AND is_watched = 1
-    </select>
-
-    <update id="updateWatched">
-        UPDATE stock_master
-        SET is_watched = #{isWatched},
-            updated_at = CURRENT_TIMESTAMP
-        WHERE stock_code = #{stockCode}
-    </update>
 
     <update id="updateMarketType">
         UPDATE stock_master
@@ -122,53 +101,11 @@
         WHERE stock_code = #{stockCode}
     </update>
 
-    <update id="markHeldPositionsWatched">
-        UPDATE stock_master sm
-        SET sm.is_watched = 1,
-            sm.updated_at = CURRENT_TIMESTAMP
-        WHERE sm.is_active = 1
-          AND sm.stock_code IN (
-              SELECT stock_code
-              FROM portfolio_position
-              WHERE account_no = #{accountNo}
-                AND quantity > 0
-              UNION
-              SELECT stock_code
-              FROM paper_portfolio_position
-              WHERE account_no = #{accountNo}
-                AND quantity > 0
-          )
-    </update>
-
-    <update id="unwatchOverflowNonHeld">
-        UPDATE stock_master sm
-        JOIN (
-            SELECT selected.stock_code
-            FROM (
-                SELECT sm_inner.stock_code
-                FROM stock_master sm_inner
-                WHERE sm_inner.is_active = 1
-                  AND sm_inner.is_watched = 1
-                  AND NOT EXISTS (
-                      SELECT 1
-                      FROM portfolio_position pp
-                      WHERE pp.account_no = #{accountNo}
-                        AND pp.stock_code = sm_inner.stock_code
-                        AND pp.quantity > 0
-                  )
-                  AND NOT EXISTS (
-                      SELECT 1
-                      FROM paper_portfolio_position ppp
-                      WHERE ppp.account_no = #{accountNo}
-                        AND ppp.stock_code = sm_inner.stock_code
-                        AND ppp.quantity > 0
-                  )
-                ORDER BY sm_inner.updated_at ASC, sm_inner.stock_code ASC
-                LIMIT #{limit}
-            ) selected
-        ) old_watched ON old_watched.stock_code = sm.stock_code
-        SET sm.is_watched = 0,
-            sm.updated_at = CURRENT_TIMESTAMP
+    <update id="updateActive">
+        UPDATE stock_master
+        SET is_active = #{isActive},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE stock_code = #{stockCode}
     </update>
 
 </mapper>

@@ -33,5 +33,14 @@
         )
     </insert>
 
+    <select id="findRecentFailures" resultType="com.bowon.cpm.common.domain.BrokerApiLog">
+        SELECT id, broker_type, api_name, http_method, request_url, request_body,
+               response_status, response_body, success, error_message, elapsed_ms, called_at
+        FROM broker_api_log
+        WHERE success = 0
+        ORDER BY called_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
 </mapper>
 

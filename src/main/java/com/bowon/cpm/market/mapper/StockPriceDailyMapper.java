@@ -36,5 +36,10 @@ public interface StockPriceDailyMapper {
             @Param("fromDate") LocalDate fromDate,
             @Param("toDate") LocalDate toDate
     );
+
+    java.util.Map<String, Object> findRecentLiquidityAverage(
+            @Param("stockCode") String stockCode,
+            @Param("limit") int limit
+    );
 }
 
