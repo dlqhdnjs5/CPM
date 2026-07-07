@@ -7,6 +7,7 @@ import com.bowon.cpm.paper.domain.PaperAccountBalance;
 import com.bowon.cpm.paper.domain.PaperPortfolioPosition;
 import com.bowon.cpm.paper.service.PaperPortfolioService;
 import com.bowon.cpm.portfolio.domain.PortfolioPosition;
+import com.bowon.cpm.portfolio.service.AccountRevaluationService;
 import com.bowon.cpm.portfolio.service.PortfolioService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,6 +26,7 @@ public class AccountController {
 
     private final PortfolioService portfolioService;
     private final PaperPortfolioService paperPortfolioService;
+    private final AccountRevaluationService accountRevaluationService;
     private final KisProperties kisProperties;
 
     /**
@@ -61,6 +63,16 @@ public class AccountController {
         return paperPortfolioService.findLatestAccountBalance(accountNo)
                 .map(balance -> ApiResponse.ok("PAPER account balance initialized", balance))
                 .orElse(ApiResponse.error("PAPER account balance initialization failed"));
+    }
+
+    @PostMapping("/revalue")
+    public ApiResponse<Object> revalueCurrentMode() {
+        return ApiResponse.ok("Account revalued", accountRevaluationService.revalueCurrentMode());
+    }
+
+    @PostMapping("/paper/revalue")
+    public ApiResponse<PaperAccountBalance> revaluePaper() {
+        return ApiResponse.ok("PAPER account revalued", accountRevaluationService.revaluePaper());
     }
 
     @GetMapping("/paper/positions")

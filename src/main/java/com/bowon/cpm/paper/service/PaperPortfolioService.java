@@ -1,6 +1,8 @@
 package com.bowon.cpm.paper.service;
 
 import com.bowon.cpm.order.domain.OrderRequest;
+import com.bowon.cpm.broker.BrokerClient;
+import com.bowon.cpm.broker.dto.StockQuoteResult;
 import com.bowon.cpm.paper.domain.PaperAccountBalance;
 import com.bowon.cpm.paper.domain.PaperPortfolioPosition;
 import com.bowon.cpm.paper.domain.PaperPortfolioProfitLoss;
@@ -11,6 +13,7 @@ import com.bowon.cpm.portfolio.domain.PortfolioPosition;
 import com.bowon.cpm.stock.domain.StockMaster;
 import com.bowon.cpm.stock.service.StockService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +24,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class PaperPortfolioService {
 
@@ -32,6 +36,7 @@ public class PaperPortfolioService {
     private final PaperPortfolioPositionMapper paperPositionMapper;
     private final PaperPortfolioProfitLossMapper paperProfitLossMapper;
     private final StockService stockService;
+    private final BrokerClient brokerClient;
 
     @Transactional
     public void ensureAccountInitialized(String accountNo, BigDecimal seedCash) {
@@ -83,7 +88,31 @@ public class PaperPortfolioService {
                 .orElse(null);
         PaperPortfolioPosition after = calculateAfterPosition(orderRequest, before, executedPrice);
         paperPositionMapper.upsert(after);
-        recordAccountSnapshot(orderRequest, zeroIfNull(executedAmount));
+        recordAccountSnapshotAfterExecution(orderRequest, zeroIfNull(executedAmount));
+    }
+
+    @Transactional
+    public PaperAccountBalance revalue(String accountNo) {
+        PaperAccountBalance previous = findLatestAccountBalance(accountNo)
+                .orElseThrow(() -> new IllegalStateException("PAPER account balance not initialized"));
+
+        List<PaperPortfolioPosition> positions = paperPositionMapper.findAllHeld(accountNo);
+        int updated = 0;
+        for (PaperPortfolioPosition position : positions) {
+            BigDecimal currentPrice = fetchCurrentPriceOrFallback(position);
+            PaperPortfolioPosition revalued = revaluePosition(position, currentPrice);
+            paperPositionMapper.upsert(revalued);
+            updated++;
+        }
+
+        PaperAccountBalance snapshot = recordAccountSnapshot(
+                accountNo,
+                zeroIfNull(previous.getCashBalance()),
+                zeroIfNull(previous.getAvailableCash())
+        );
+        log.info("[PAPER] revalued account: accountNo={}, positions={}, totalPL={}, returnRate={}",
+                accountNo, updated, snapshot.getTotalProfitLossAmount(), snapshot.getTotalProfitLossRate());
+        return snapshot;
     }
 
     private PaperPortfolioPosition calculateAfterPosition(
@@ -131,14 +160,17 @@ public class PaperPortfolioService {
                 .build();
     }
 
-    private void recordAccountSnapshot(OrderRequest orderRequest, BigDecimal executedAmount) {
+    private void recordAccountSnapshotAfterExecution(OrderRequest orderRequest, BigDecimal executedAmount) {
         PaperAccountBalance previous = findLatestAccountBalance(orderRequest.getAccountNo()).orElse(null);
         BigDecimal beforeCash = previous != null ? zeroIfNull(previous.getCashBalance()) : ZERO;
         BigDecimal cash = "BUY".equals(orderRequest.getOrderSide())
                 ? beforeCash.subtract(executedAmount)
                 : beforeCash.add(executedAmount);
+        recordAccountSnapshot(orderRequest.getAccountNo(), cash, cash);
+    }
 
-        List<PaperPortfolioPosition> positions = paperPositionMapper.findAllHeld(orderRequest.getAccountNo());
+    private PaperAccountBalance recordAccountSnapshot(String accountNo, BigDecimal cash, BigDecimal availableCash) {
+        List<PaperPortfolioPosition> positions = paperPositionMapper.findAllHeld(accountNo);
         BigDecimal totalEvaluation = positions.stream()
                 .map(PaperPortfolioPosition::getValuationAmount)
                 .map(this::zeroIfNull)
@@ -150,17 +182,56 @@ public class PaperPortfolioService {
         BigDecimal totalAsset = cash.add(totalEvaluation);
         BigDecimal totalCostBasis = totalAsset.subtract(totalProfitLoss);
 
-        paperAccountBalanceMapper.insert(PaperAccountBalance.builder()
-                .accountNo(orderRequest.getAccountNo())
+        PaperAccountBalance snapshot = PaperAccountBalance.builder()
+                .accountNo(accountNo)
                 .baseDatetime(LocalDateTime.now())
                 .cashBalance(cash)
-                .availableCash(cash)
+                .availableCash(availableCash)
                 .totalAssetAmount(totalAsset)
                 .totalEvaluationAmount(totalEvaluation)
                 .totalProfitLossAmount(totalProfitLoss)
                 .totalProfitLossRate(calculateRate(totalProfitLoss, totalCostBasis))
-                .build());
-        upsertDailyProfitLoss(orderRequest.getAccountNo());
+                .build();
+        paperAccountBalanceMapper.insert(snapshot);
+        upsertDailyProfitLoss(accountNo);
+        return snapshot;
+    }
+
+    private BigDecimal fetchCurrentPriceOrFallback(PaperPortfolioPosition position) {
+        try {
+            StockQuoteResult quote = brokerClient.getCurrentPrice(position.getStockCode());
+            if (quote != null && quote.getCurrentPrice() != null
+                    && quote.getCurrentPrice().compareTo(ZERO) > 0) {
+                return quote.getCurrentPrice();
+            }
+        } catch (Exception e) {
+            log.warn("[PAPER] quote fetch failed for revaluation: stockCode={}, error={}",
+                    position.getStockCode(), e.getMessage());
+        }
+        return zeroIfNull(position.getCurrentPrice());
+    }
+
+    private PaperPortfolioPosition revaluePosition(PaperPortfolioPosition position, BigDecimal currentPrice) {
+        BigDecimal price = zeroIfNull(currentPrice);
+        int quantity = position.getQuantity() != null ? position.getQuantity() : 0;
+        BigDecimal averagePrice = zeroIfNull(position.getAverageBuyPrice());
+        BigDecimal purchaseAmount = averagePrice.multiply(BigDecimal.valueOf(quantity));
+        BigDecimal valuationAmount = price.multiply(BigDecimal.valueOf(quantity));
+        BigDecimal profitLossAmount = valuationAmount.subtract(purchaseAmount);
+
+        return PaperPortfolioPosition.builder()
+                .accountNo(position.getAccountNo())
+                .stockCode(position.getStockCode())
+                .stockName(position.getStockName())
+                .quantity(quantity)
+                .availableQuantity(position.getAvailableQuantity())
+                .averageBuyPrice(averagePrice)
+                .currentPrice(price)
+                .purchaseAmount(purchaseAmount)
+                .valuationAmount(valuationAmount)
+                .profitLossAmount(profitLossAmount)
+                .profitLossRate(calculateRate(profitLossAmount, purchaseAmount))
+                .build();
     }
 
     private void upsertDailyProfitLoss(String accountNo) {

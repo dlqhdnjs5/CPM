@@ -17,6 +17,10 @@ import com.bowon.cpm.order.mapper.OrderRequestMapper;
 import com.bowon.cpm.paper.domain.PaperAccountBalance;
 import com.bowon.cpm.paper.domain.PaperPortfolioPosition;
 import com.bowon.cpm.paper.service.PaperPortfolioService;
+import com.bowon.cpm.portfolio.domain.AccountBalance;
+import com.bowon.cpm.portfolio.domain.PortfolioPosition;
+import com.bowon.cpm.portfolio.mapper.AccountBalanceMapper;
+import com.bowon.cpm.portfolio.mapper.PortfolioPositionMapper;
 import com.bowon.cpm.risk.domain.RiskCheckResult;
 import com.bowon.cpm.risk.mapper.RiskCheckResultMapper;
 import com.bowon.cpm.stock.domain.StockMaster;
@@ -39,6 +43,8 @@ public class DashboardService {
     private final TradingProperties tradingProperties;
     private final KisProperties kisProperties;
     private final PaperPortfolioService paperPortfolioService;
+    private final AccountBalanceMapper accountBalanceMapper;
+    private final PortfolioPositionMapper portfolioPositionMapper;
     private final StockMasterMapper stockMasterMapper;
     private final AiDecisionMapper aiDecisionMapper;
     private final RiskCheckResultMapper riskCheckResultMapper;
@@ -62,8 +68,8 @@ public class DashboardService {
                 recentRiskChecks.stream().filter(item -> Boolean.FALSE.equals(item.getPassed())).count()
         );
 
-        PaperAccountBalance paperBalance = paperPortfolioService.findLatestAccountBalance(accountNo).orElse(null);
-        List<PaperPortfolioPosition> paperPositions = paperPortfolioService.findPositions(accountNo);
+        PaperAccountBalance accountBalance = currentModeBalance(accountNo);
+        List<PaperPortfolioPosition> positions = currentModePositions(accountNo);
 
         return new DashboardSummary(
                 LocalDateTime.now(),
@@ -75,8 +81,8 @@ public class DashboardService {
                 ),
                 activeStocks,
                 stockMasterList,
-                paperBalance,
-                paperPositions,
+                accountBalance,
+                positions,
                 decisionSummary,
                 recentDecisions,
                 recentRiskChecks,
@@ -102,6 +108,55 @@ public class DashboardService {
             return "****";
         }
         return compact.substring(0, 4) + "****";
+    }
+
+    private PaperAccountBalance currentModeBalance(String accountNo) {
+        if (tradingProperties.isPaperMode()) {
+            return paperPortfolioService.findLatestAccountBalance(accountNo).orElse(null);
+        }
+        List<AccountBalance> latest = accountBalanceMapper.findLatestByAccountNo(accountNo);
+        if (latest.isEmpty()) {
+            return null;
+        }
+        AccountBalance balance = latest.get(0);
+        return PaperAccountBalance.builder()
+                .id(balance.getId())
+                .accountNo(balance.getAccountNo())
+                .baseDatetime(balance.getBaseDatetime())
+                .cashBalance(balance.getCashBalance())
+                .availableCash(balance.getAvailableCash())
+                .totalAssetAmount(balance.getTotalAssetAmount())
+                .totalEvaluationAmount(balance.getTotalEvaluationAmount())
+                .totalProfitLossAmount(balance.getTotalProfitLossAmount())
+                .totalProfitLossRate(balance.getTotalProfitLossRate())
+                .build();
+    }
+
+    private List<PaperPortfolioPosition> currentModePositions(String accountNo) {
+        if (tradingProperties.isPaperMode()) {
+            return paperPortfolioService.findPositions(accountNo);
+        }
+        return portfolioPositionMapper.findByAccountNo(accountNo).stream()
+                .map(this::toDashboardPosition)
+                .toList();
+    }
+
+    private PaperPortfolioPosition toDashboardPosition(PortfolioPosition position) {
+        return PaperPortfolioPosition.builder()
+                .id(position.getId())
+                .accountNo(position.getAccountNo())
+                .stockCode(position.getStockCode())
+                .stockName(position.getStockName())
+                .quantity(position.getQuantity())
+                .availableQuantity(position.getAvailableQuantity())
+                .averageBuyPrice(position.getAverageBuyPrice())
+                .currentPrice(position.getCurrentPrice())
+                .purchaseAmount(position.getPurchaseAmount())
+                .valuationAmount(position.getValuationAmount())
+                .profitLossAmount(position.getProfitLossAmount())
+                .profitLossRate(position.getProfitLossRate())
+                .updatedAt(position.getUpdatedAt())
+                .build();
     }
 
     @Transactional(readOnly = true)

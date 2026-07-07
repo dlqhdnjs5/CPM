@@ -3,6 +3,7 @@ package com.bowon.cpm.admin;
 import com.bowon.cpm.broker.kis.KisProperties;
 import com.bowon.cpm.paper.domain.PaperAccountBalance;
 import com.bowon.cpm.paper.service.PaperPortfolioService;
+import com.bowon.cpm.portfolio.service.AccountRevaluationService;
 import com.bowon.cpm.portfolio.service.PortfolioService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,7 @@ class AccountControllerTest {
 
     @MockBean PortfolioService portfolioService;
     @MockBean PaperPortfolioService paperPortfolioService;
+    @MockBean AccountRevaluationService accountRevaluationService;
     @MockBean KisProperties kisProperties;
 
     @Test

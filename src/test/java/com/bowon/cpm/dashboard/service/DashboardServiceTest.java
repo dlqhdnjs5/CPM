@@ -11,6 +11,8 @@ import com.bowon.cpm.dashboard.domain.DashboardSummary;
 import com.bowon.cpm.order.mapper.OrderRequestMapper;
 import com.bowon.cpm.paper.domain.PaperAccountBalance;
 import com.bowon.cpm.paper.service.PaperPortfolioService;
+import com.bowon.cpm.portfolio.mapper.AccountBalanceMapper;
+import com.bowon.cpm.portfolio.mapper.PortfolioPositionMapper;
 import com.bowon.cpm.risk.domain.RiskCheckResult;
 import com.bowon.cpm.risk.mapper.RiskCheckResultMapper;
 import com.bowon.cpm.stock.domain.StockMaster;
@@ -33,6 +35,8 @@ class DashboardServiceTest {
     @DisplayName("summary aggregates PAPER balance, decisions, risk failures, and active stocks")
     void summary() {
         PaperPortfolioService paperPortfolioService = mock(PaperPortfolioService.class);
+        AccountBalanceMapper accountBalanceMapper = mock(AccountBalanceMapper.class);
+        PortfolioPositionMapper portfolioPositionMapper = mock(PortfolioPositionMapper.class);
         StockMasterMapper stockMasterMapper = mock(StockMasterMapper.class);
         AiDecisionMapper aiDecisionMapper = mock(AiDecisionMapper.class);
         RiskCheckResultMapper riskCheckResultMapper = mock(RiskCheckResultMapper.class);
@@ -45,6 +49,8 @@ class DashboardServiceTest {
                 new TradingProperties("PAPER", false),
                 new KisProperties(null, null, "key", "secret", "12345678", "01", "/token", "/approval"),
                 paperPortfolioService,
+                accountBalanceMapper,
+                portfolioPositionMapper,
                 stockMasterMapper,
                 aiDecisionMapper,
                 riskCheckResultMapper,

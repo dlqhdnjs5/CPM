@@ -8,7 +8,7 @@ const state = {
 const $ = (id) => document.getElementById(id);
 
 document.addEventListener("DOMContentLoaded", () => {
-  $("refreshButton").addEventListener("click", loadSummary);
+  $("refreshButton").addEventListener("click", refreshDashboard);
   $("initPaperButton").addEventListener("click", initPaperBalance);
   $("runAiButton").addEventListener("click", runAiDecision);
   $("riskButton").addEventListener("click", runRiskCheck);
@@ -31,6 +31,20 @@ async function loadSummary() {
     state.summary = payload.data;
     render(payload.data);
     setActionStatus("Ready");
+  } catch (error) {
+    setActionStatus(error.message, true);
+  }
+}
+
+async function refreshDashboard() {
+  try {
+    setActionStatus("Revaluing account...");
+    const response = await fetch("/api/account/revalue", { method: "POST" });
+    const payload = await response.json();
+    if (!payload.success) throw new Error(payload.message || "Account revalue failed");
+    await loadSummary();
+    await loadTradeHistory();
+    setActionStatus("Revalued");
   } catch (error) {
     setActionStatus(error.message, true);
   }

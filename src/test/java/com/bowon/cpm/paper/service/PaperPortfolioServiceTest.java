@@ -1,5 +1,6 @@
 package com.bowon.cpm.paper.service;
 
+import com.bowon.cpm.broker.BrokerClient;
 import com.bowon.cpm.order.domain.OrderRequest;
 import com.bowon.cpm.paper.domain.PaperAccountBalance;
 import com.bowon.cpm.paper.domain.PaperPortfolioPosition;
@@ -33,6 +34,7 @@ class PaperPortfolioServiceTest {
     @Mock PaperPortfolioPositionMapper positionMapper;
     @Mock PaperPortfolioProfitLossMapper profitLossMapper;
     @Mock StockService stockService;
+    @Mock BrokerClient brokerClient;
 
     PaperPortfolioService service;
 
@@ -42,7 +44,8 @@ class PaperPortfolioServiceTest {
                 accountBalanceMapper,
                 positionMapper,
                 profitLossMapper,
-                stockService
+                stockService,
+                brokerClient
         );
     }
 
