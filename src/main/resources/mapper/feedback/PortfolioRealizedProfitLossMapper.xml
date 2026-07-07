@@ -59,4 +59,37 @@
           AND broker_order_no LIKE 'PAPER-%'
     </select>
 
+    <select id="countRecentLossesByStock" resultType="int">
+        SELECT COUNT(*)
+        FROM portfolio_realized_profit_loss
+        WHERE account_no = #{accountNo}
+          AND stock_code = #{stockCode}
+          AND realized_profit_loss &lt; 0
+          AND realized_at &gt;= #{since}
+        <choose>
+            <when test="paperMode">
+                AND broker_order_no LIKE 'PAPER-%'
+            </when>
+            <otherwise>
+                AND (broker_order_no IS NULL OR broker_order_no NOT LIKE 'PAPER-%')
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="countRecentLossesByAccount" resultType="int">
+        SELECT COUNT(*)
+        FROM portfolio_realized_profit_loss
+        WHERE account_no = #{accountNo}
+          AND realized_profit_loss &lt; 0
+          AND realized_at &gt;= #{since}
+        <choose>
+            <when test="paperMode">
+                AND broker_order_no LIKE 'PAPER-%'
+            </when>
+            <otherwise>
+                AND (broker_order_no IS NULL OR broker_order_no NOT LIKE 'PAPER-%')
+            </otherwise>
+        </choose>
+    </select>
+
 </mapper>

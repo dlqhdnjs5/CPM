@@ -101,5 +101,29 @@
           AND order_status IN ('READY', 'ORDERED', 'PARTIALLY_FILLED', 'FILLED')
     </select>
 
+    <select id="countTodayStopLossSells" resultType="int">
+        SELECT COUNT(*)
+        FROM order_request
+        WHERE account_no = #{accountNo}
+          AND broker_type = #{brokerType}
+          AND order_side = 'SELL'
+          AND request_reason LIKE 'SELL[STOP_LOSS_HIT]%'
+          AND requested_at &gt;= CURDATE()
+          AND requested_at &lt; DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+          AND order_status IN ('READY', 'ORDERED', 'PARTIALLY_FILLED', 'FILLED')
+    </select>
+
+    <select id="existsRecentStopLossSellByStock" resultType="boolean">
+        SELECT COUNT(*) &gt; 0
+        FROM order_request
+        WHERE account_no = #{accountNo}
+          AND broker_type = #{brokerType}
+          AND stock_code = #{stockCode}
+          AND order_side = 'SELL'
+          AND request_reason LIKE 'SELL[STOP_LOSS_HIT]%'
+          AND requested_at &gt;= #{since}
+          AND order_status IN ('READY', 'ORDERED', 'PARTIALLY_FILLED', 'FILLED')
+    </select>
+
 </mapper>
 

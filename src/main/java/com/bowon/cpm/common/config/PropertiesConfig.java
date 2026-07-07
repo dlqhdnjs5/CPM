@@ -14,7 +14,8 @@ import org.springframework.context.annotation.Configuration;
         NaverProperties.class,
         OpenAiProperties.class,
         TradingProperties.class,
-        LiquidityProperties.class
+        LiquidityProperties.class,
+        RiskGuardProperties.class
 })
 public class PropertiesConfig {
 }

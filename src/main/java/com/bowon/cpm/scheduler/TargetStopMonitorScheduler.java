@@ -5,6 +5,7 @@ import com.bowon.cpm.ai.mapper.AiDecisionMapper;
 import com.bowon.cpm.broker.BrokerClient;
 import com.bowon.cpm.broker.dto.StockQuoteResult;
 import com.bowon.cpm.broker.kis.KisProperties;
+import com.bowon.cpm.common.config.RiskGuardProperties;
 import com.bowon.cpm.common.config.TradingProperties;
 import com.bowon.cpm.order.mapper.OrderRequestMapper;
 import com.bowon.cpm.order.service.OrderService;
@@ -42,6 +43,7 @@ public class TargetStopMonitorScheduler {
     private final OrderRequestMapper orderRequestMapper;
     private final BrokerClient brokerClient;
     private final OrderService orderService;
+    private final RiskGuardProperties riskGuardProperties;
 
     @Scheduled(cron = "0 */1 9-15 * * MON-FRI")
     public void run() {
@@ -69,7 +71,7 @@ public class TargetStopMonitorScheduler {
                         continue;
                     }
 
-                    SellTrigger trigger = decideTrigger(decision, currentPrice);
+                    SellTrigger trigger = decideTrigger(decision, position, currentPrice);
                     if (trigger == null) {
                         skipped++;
                         continue;
@@ -105,17 +107,34 @@ public class TargetStopMonitorScheduler {
         }
     }
 
-    private SellTrigger decideTrigger(AiDecision decision, BigDecimal currentPrice) {
+    private SellTrigger decideTrigger(AiDecision decision, PortfolioPosition position, BigDecimal currentPrice) {
         if (decision.getStopLossPrice() != null
                 && currentPrice.compareTo(decision.getStopLossPrice()) <= 0) {
             return SellTrigger.STOP_LOSS_HIT;
         }
+
+        boolean hasFirstTargetSell = orderRequestMapper
+                .existsSellByTrigger(decision.getId(), SellTrigger.TARGET_HIT_1.name());
+        boolean hasSecondTargetSell = orderRequestMapper
+                .existsSellByTrigger(decision.getId(), SellTrigger.TARGET_HIT_2.name());
+        if (hasFirstTargetSell && !hasSecondTargetSell && isBreakevenProtectHit(position, currentPrice)) {
+            return SellTrigger.BREAKEVEN_PROTECT;
+        }
+
         if (decision.getTargetPrice() != null
                 && currentPrice.compareTo(decision.getTargetPrice()) >= 0) {
-            boolean hasFirstTargetSell = orderRequestMapper
-                    .existsSellByTrigger(decision.getId(), SellTrigger.TARGET_HIT_1.name());
             return hasFirstTargetSell ? SellTrigger.TARGET_HIT_2 : SellTrigger.TARGET_HIT_1;
         }
         return null;
+    }
+
+    private boolean isBreakevenProtectHit(PortfolioPosition position, BigDecimal currentPrice) {
+        if (position == null || position.getAverageBuyPrice() == null
+                || position.getAverageBuyPrice().compareTo(BigDecimal.ZERO) <= 0) {
+            return false;
+        }
+        BigDecimal threshold = position.getAverageBuyPrice()
+                .multiply(BigDecimal.ONE.add(riskGuardProperties.breakevenProtectBufferRate()));
+        return currentPrice.compareTo(threshold) <= 0;
     }
 }

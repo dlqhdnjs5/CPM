@@ -72,8 +72,8 @@ class SellOrderPolicyEngineTest {
     }
 
     @Test
-    @DisplayName("Second target or stop loss sells all remaining quantity")
-    void secondTargetAndStopLossSellAll() {
+    @DisplayName("Second target, stop loss, or breakeven protection sells all remaining quantity")
+    void secondTargetStopLossAndBreakevenSellAll() {
         SellOrderPolicyEngine.SellCalculation target2 = engine.calculate(
                 decision("BUY", "0.10"),
                 position(7, 7),
@@ -90,9 +90,18 @@ class SellOrderPolicyEngineTest {
                 SellTrigger.STOP_LOSS_HIT,
                 false
         );
+        SellOrderPolicyEngine.SellCalculation breakeven = engine.calculate(
+                decision("BUY", "0.10"),
+                position(7, 7),
+                new BigDecimal("10000"),
+                new BigDecimal("100000"),
+                SellTrigger.BREAKEVEN_PROTECT,
+                false
+        );
 
         assertThat(target2.quantity()).isEqualTo(7);
         assertThat(stopLoss.quantity()).isEqualTo(7);
+        assertThat(breakeven.quantity()).isEqualTo(7);
     }
 
     @Test

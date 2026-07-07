@@ -1,6 +1,8 @@
 package com.bowon.cpm.order.policy;
 
 import com.bowon.cpm.ai.domain.AiDecision;
+import com.bowon.cpm.common.config.RiskGuardProperties;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -8,16 +10,17 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
- * BUY 주문 정책 엔진.
+ * BUY order sizing policy.
  *
- * 계산 공식:
- * 주문 기준 금액 = 총 평가자산 x AI 추천 비중
- * 실제 주문 가능 금액 = min(주문 기준 금액, 예수금)
- * 주문 수량 = floor(실제 주문 가능 금액 / 현재가)
+ * Base cap: min(total asset * AI recommended weight, available cash).
+ * Risk cap: max loss per trade / loss per share, based on AI stop loss.
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class BuyOrderPolicyEngine {
+
+    private final RiskGuardProperties riskGuardProperties;
 
     public record OrderCalculation(
             int quantity,
@@ -38,11 +41,13 @@ public class BuyOrderPolicyEngine {
         BigDecimal weight = decision.getRecommendedPortfolioWeight();
 
         if (currentPrice == null || currentPrice.compareTo(BigDecimal.ZERO) <= 0) {
-            log.warn("[BuyPolicy] 현재가 없음: stockCode={}", decision.getStockCode());
+            log.warn("[BuyPolicy] current price missing: stockCode={}", decision.getStockCode());
             return new OrderCalculation(0, BigDecimal.ZERO, BigDecimal.ZERO);
         }
 
-        BigDecimal safeAvailableCash = availableCash != null ? availableCash : BigDecimal.ZERO;
+        BigDecimal rawAvailableCash = availableCash != null ? availableCash : BigDecimal.ZERO;
+        BigDecimal reserveAmount = calculateCashReserve(totalAsset);
+        BigDecimal safeAvailableCash = rawAvailableCash.subtract(reserveAmount).max(BigDecimal.ZERO);
         BigDecimal targetAmount;
         if (weight != null && totalAsset != null && totalAsset.compareTo(BigDecimal.ZERO) > 0) {
             targetAmount = totalAsset.multiply(weight);
@@ -50,27 +55,53 @@ public class BuyOrderPolicyEngine {
             targetAmount = safeAvailableCash;
         }
 
-        BigDecimal orderAmount = targetAmount.min(safeAvailableCash);
-        if (orderAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            log.warn("[BuyPolicy] 주문 가능 금액 없음: stockCode={}, availableCash={}",
-                    decision.getStockCode(), safeAvailableCash);
+        BigDecimal cappedAmount = targetAmount.min(safeAvailableCash);
+        if (cappedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("[BuyPolicy] no orderable cash after reserve: stockCode={}, availableCash={}, reserve={}",
+                    decision.getStockCode(), rawAvailableCash, reserveAmount);
             return new OrderCalculation(0, BigDecimal.ZERO, currentPrice);
         }
 
-        int quantity = orderAmount.divide(currentPrice, 0, RoundingMode.FLOOR).intValue();
-        if (quantity == 0 && safeAvailableCash.compareTo(currentPrice) >= 0) {
-            log.info("[BuyPolicy] 비중 제한으로 qty=0이나 예수금으로 1주 가능 → 1주로 조정: " +
-                            "stockCode={}, targetAmt={}, availableCash={}, price={}",
-                    decision.getStockCode(), targetAmount, safeAvailableCash, currentPrice);
-            quantity = 1;
-        }
+        int cashWeightQuantity = cappedAmount.divide(currentPrice, 0, RoundingMode.FLOOR).intValue();
+        int riskQuantity = calculateRiskQuantity(decision, totalAsset);
+        int quantity = Math.min(cashWeightQuantity, riskQuantity);
 
         BigDecimal actualAmount = currentPrice.multiply(BigDecimal.valueOf(quantity));
-        log.info("[BuyPolicy] 주문 계산: stockCode={}, weight={}, targetAmt={}, " +
-                        "availableCash={}, orderAmt={}, price={}, qty={}",
-                decision.getStockCode(), weight, targetAmount,
-                safeAvailableCash, orderAmount, currentPrice, quantity);
+        log.info("[BuyPolicy] calculated: stockCode={}, weight={}, targetAmount={}, availableCash={}, " +
+                        "reserveAmount={}, orderableCash={}, cappedAmount={}, cashWeightQty={}, riskQty={}, price={}, qty={}",
+                decision.getStockCode(), weight, targetAmount, rawAvailableCash,
+                reserveAmount, safeAvailableCash,
+                cappedAmount, cashWeightQuantity, riskQuantity, currentPrice, quantity);
 
         return new OrderCalculation(quantity, actualAmount, currentPrice);
+    }
+
+    private BigDecimal calculateCashReserve(BigDecimal totalAsset) {
+        BigDecimal reserveRate = riskGuardProperties.minCashReserveRate();
+        if (totalAsset == null || totalAsset.compareTo(BigDecimal.ZERO) <= 0
+                || reserveRate == null || reserveRate.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO;
+        }
+        return totalAsset.multiply(reserveRate);
+    }
+
+    private int calculateRiskQuantity(AiDecision decision, BigDecimal totalAsset) {
+        BigDecimal currentPrice = decision.getCurrentPrice();
+        BigDecimal stopLossPrice = decision.getStopLossPrice();
+        BigDecimal riskRate = riskGuardProperties.maxRiskPerTradeRate();
+
+        if (totalAsset == null || totalAsset.compareTo(BigDecimal.ZERO) <= 0
+                || stopLossPrice == null || stopLossPrice.compareTo(BigDecimal.ZERO) <= 0
+                || currentPrice == null || currentPrice.compareTo(stopLossPrice) <= 0
+                || riskRate == null || riskRate.compareTo(BigDecimal.ZERO) <= 0) {
+            return Integer.MAX_VALUE;
+        }
+
+        BigDecimal lossPerShare = currentPrice.subtract(stopLossPrice);
+        BigDecimal riskBudget = totalAsset.multiply(riskRate);
+        int riskQuantity = riskBudget.divide(lossPerShare, 0, RoundingMode.FLOOR).intValue();
+        log.info("[BuyPolicy] risk cap: stockCode={}, riskBudget={}, lossPerShare={}, riskQty={}",
+                decision.getStockCode(), riskBudget, lossPerShare, riskQuantity);
+        return Math.max(riskQuantity, 0);
     }
 }

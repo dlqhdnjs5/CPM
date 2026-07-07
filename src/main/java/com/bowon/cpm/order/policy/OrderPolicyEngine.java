@@ -1,5 +1,6 @@
 package com.bowon.cpm.order.policy;
 
+import com.bowon.cpm.common.config.RiskGuardProperties;
 import org.springframework.stereotype.Component;
 
 /**
@@ -9,5 +10,9 @@ import org.springframework.stereotype.Component;
 @Deprecated
 @Component
 public class OrderPolicyEngine extends BuyOrderPolicyEngine {
+
+    public OrderPolicyEngine(RiskGuardProperties riskGuardProperties) {
+        super(riskGuardProperties);
+    }
 }
 

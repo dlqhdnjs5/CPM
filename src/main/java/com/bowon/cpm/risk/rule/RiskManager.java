@@ -52,6 +52,15 @@ public class RiskManager {
 
         // 2. BUY 시 목표가/손절가 방향 검증
         if ("BUY".equals(decision.getDecision())) {
+            if (decision.getCurrentPrice() == null) {
+                return "현재가 없음";
+            }
+            if (decision.getTargetPrice() == null) {
+                return "목표가 없음";
+            }
+            if (decision.getStopLossPrice() == null) {
+                return "손절가 없음";
+            }
             if (decision.getTargetPrice() != null && decision.getCurrentPrice() != null
                     && decision.getTargetPrice().compareTo(decision.getCurrentPrice()) <= 0) {
                 return String.format("목표가가 현재가 이하: target=%.0f <= current=%.0f",

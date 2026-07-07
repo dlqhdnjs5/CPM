@@ -6,6 +6,7 @@ import com.bowon.cpm.broker.BrokerClient;
 import com.bowon.cpm.broker.dto.AccountBalanceResult;
 import com.bowon.cpm.broker.dto.StockQuoteResult;
 import com.bowon.cpm.broker.kis.KisProperties;
+import com.bowon.cpm.common.config.RiskGuardProperties;
 import com.bowon.cpm.common.config.TradingProperties;
 import com.bowon.cpm.order.domain.OrderRequest;
 import com.bowon.cpm.order.executor.OrderExecutor;
@@ -37,6 +38,7 @@ import java.util.Optional;
 public class OrderService {
 
     private static final String DEFAULT_POLICY_CODE = "DEFAULT_RISK_POLICY";
+    private static final DateTimeFormatter IDEMPOTENCY_FMT = DateTimeFormatter.ofPattern("yyyyMMddHHmm");
 
     private final BuyOrderPolicyEngine buyOrderPolicyEngine;
     private final SellOrderPolicyEngine sellOrderPolicyEngine;
@@ -52,66 +54,40 @@ public class OrderService {
     private final BrokerClient brokerClient;
     private final KisProperties kisProperties;
     private final TradingProperties tradingProperties;
+    private final RiskGuardProperties riskGuardProperties;
 
-    private static final DateTimeFormatter IDEMPOTENCY_FMT = DateTimeFormatter.ofPattern("yyyyMMddHHmm");
-
-    /**
-     * AI 판단 ID를 받아 주문 실행 전체 플로우 수행
-     *
-     * 1. AI 판단 조회
-     * 2. 리스크 검증 결과 확인 (passed=true인 최신 건)
-     * 3. idempotency_key 중복 확인
-     * 4. KIS 실시간 잔고 조회 (주문 직전 최신 잔고)
-     * 5. 주문 수량 계산 (OrderPolicyEngine)
-     * 6. order_request 생성 (READY)
-     * 7. KIS 주문 API 호출 (OrderExecutor)
-     *
-     * @param aiDecisionId AI 판단 ID
-     */
     public OrderRequest placeOrder(Long aiDecisionId) {
         return placeOrderInternal(aiDecisionId, null, true);
     }
 
-    /**
-     * 목표가/손절가 트리거 기반 SELL 주문 실행.
-     * AI BUY 판단에 연결된 보유 포지션을 청산/부분청산할 때 사용한다.
-     */
     public OrderRequest placeSellOrderByTrigger(Long aiDecisionId, SellTrigger trigger) {
         if (trigger == null || SellTrigger.AI_DECISION.equals(trigger)) {
-            throw new IllegalArgumentException("트리거 기반 매도에는 TARGET/STOP 트리거가 필요함");
+            throw new IllegalArgumentException("trigger based sell requires TARGET or STOP trigger");
         }
         return placeOrderInternal(aiDecisionId, trigger, false);
     }
 
     private OrderRequest placeOrderInternal(Long aiDecisionId, SellTrigger forcedSellTrigger, boolean requireRiskPassed) {
-        // 1. AI 판단 조회
         AiDecision decision = aiDecisionMapper.findById(aiDecisionId)
-                .orElseThrow(() -> new IllegalArgumentException("AI 판단 없음: id=" + aiDecisionId));
+                .orElseThrow(() -> new IllegalArgumentException("AI decision not found: id=" + aiDecisionId));
 
         String orderSide = forcedSellTrigger != null ? "SELL" : decision.getDecision();
-
-        // HOLD는 주문 없음
         if ("HOLD".equals(orderSide)) {
-            throw new IllegalStateException("HOLD 판단은 주문 실행 불가: aiDecisionId=" + aiDecisionId);
+            throw new IllegalStateException("HOLD decision cannot create order: aiDecisionId=" + aiDecisionId);
         }
 
-        // HOLD_BY_REVIEW 상태면 주문 차단 (재검토에서 BUY 취소됨)
         if (forcedSellTrigger == null && "HOLD_BY_REVIEW".equals(decision.getDecisionStatus())) {
-            throw new IllegalStateException("재검토 결과 HOLD → 주문 차단: aiDecisionId=" + aiDecisionId);
+            throw new IllegalStateException("review changed decision to HOLD - order blocked: aiDecisionId=" + aiDecisionId);
         }
 
-        // 리스크 검증 통과 여부 확인 (passed=true인 최신 건이 있어야 주문 가능)
         if (requireRiskPassed) {
-            boolean riskPassed = riskCheckResultMapper.findLatestByAiDecisionIdAndTradingMode(
+            RiskCheckResult riskCheck = riskCheckResultMapper.findLatestByAiDecisionIdAndTradingMode(
                             aiDecisionId, tradingProperties.normalizedMode())
-                    .map(RiskCheckResult::getPassed)
-                    .orElse(false);
-            if (!riskPassed) {
-                throw new IllegalStateException("리스크 검증 미통과 → 주문 차단: aiDecisionId=" + aiDecisionId);
-            }
+                    .orElseThrow(() -> new IllegalStateException(
+                            "risk check result missing - order blocked: aiDecisionId=" + aiDecisionId));
+            validateFreshPassedRisk(aiDecisionId, riskCheck);
         }
 
-        // 2. idempotency_key 생성 + 중복 확인
         String accountNo = kisProperties.accountNo();
         SellTrigger sellTrigger = "SELL".equals(orderSide)
                 ? (forcedSellTrigger != null ? forcedSellTrigger : SellTrigger.AI_DECISION)
@@ -120,7 +96,7 @@ public class OrderService {
 
         Optional<OrderRequest> existing = orderRequestMapper.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
-            log.warn("[Order] 중복 주문 감지: idempotencyKey={}", idempotencyKey);
+            log.warn("[Order] duplicate order detected: idempotencyKey={}", idempotencyKey);
             return existing.get();
         }
 
@@ -132,10 +108,10 @@ public class OrderService {
             totalAsset = balance.getTotalAssetAmount() != null ? balance.getTotalAssetAmount() : BigDecimal.ZERO;
         } catch (Exception e) {
             if ("BUY".equals(orderSide) && !tradingProperties.isPaperMode()) {
-                log.warn("[Order] 잔고 조회 실패 (주문 중단): {}", e.getMessage());
-                throw new IllegalStateException("잔고 조회 실패로 주문 중단: " + e.getMessage());
+                log.warn("[Order] balance lookup failed, BUY blocked: {}", e.getMessage());
+                throw new IllegalStateException("balance lookup failed - order blocked: " + e.getMessage());
             }
-            log.warn("[Order] SELL 잔고 조회 실패 (totalAsset=0으로 진행): {}", e.getMessage());
+            log.warn("[Order] balance lookup failed for SELL, continuing with totalAsset=0: {}", e.getMessage());
         }
 
         if (tradingProperties.isPaperMode()) {
@@ -153,18 +129,17 @@ public class OrderService {
                 : calculateSell(decision, accountNo, totalAsset, sellTrigger);
 
         if (draft.quantity < 1) {
-            throw new IllegalStateException("주문 수량 0: stockCode=" + decision.getStockCode()
+            throw new IllegalStateException("order quantity is zero: stockCode=" + decision.getStockCode()
                     + ", side=" + orderSide + ", trigger=" + sellTrigger);
         }
 
-        // Save READY before calling the external order API.
         OrderRequest orderRequest = OrderRequest.builder()
                 .aiDecisionId(aiDecisionId)
                 .accountNo(accountNo)
                 .brokerType(tradingProperties.isPaperMode() ? "PAPER" : "KIS")
                 .stockCode(decision.getStockCode())
                 .orderSide(orderSide)
-                .orderType("MARKET")                  // 현재는 시장가 주문
+                .orderType("MARKET")
                 .orderPrice(draft.unitPrice)
                 .orderQuantity(draft.quantity)
                 .orderAmount(draft.orderAmount)
@@ -174,15 +149,31 @@ public class OrderService {
                 .build();
         orderRequestCreateService.createReady(orderRequest);
 
-        log.info("[Order] 주문 요청 생성: id={}, stockCode={}, side={}, qty={}, amount={}",
+        log.info("[Order] request created: id={}, stockCode={}, side={}, qty={}, amount={}",
                 orderRequest.getId(), orderRequest.getStockCode(),
                 orderRequest.getOrderSide(), orderRequest.getOrderQuantity(), orderRequest.getOrderAmount());
 
-        // 6. KIS 주문 API 호출 (OrderExecutor)
-        // 주의: 트랜잭션 내에서 외부 API 호출 — 타임아웃 발생 시 order_request는 READY로 남음
         orderExecutor.execute(orderRequest);
 
         return orderRequest;
+    }
+
+    private void validateFreshPassedRisk(Long aiDecisionId, RiskCheckResult riskCheck) {
+        if (!Boolean.TRUE.equals(riskCheck.getPassed())) {
+            throw new IllegalStateException("risk check failed - order blocked: aiDecisionId=" + aiDecisionId
+                    + ", reason=" + riskCheck.getFailReason());
+        }
+        if (riskCheck.getCheckedAt() == null) {
+            throw new IllegalStateException("risk check timestamp missing - order blocked: aiDecisionId=" + aiDecisionId);
+        }
+
+        LocalDateTime expiresAt = riskCheck.getCheckedAt()
+                .plusMinutes(riskGuardProperties.maxRiskCheckAgeMinutes());
+        if (LocalDateTime.now().isAfter(expiresAt)) {
+            throw new IllegalStateException("risk check expired - order blocked: aiDecisionId=" + aiDecisionId
+                    + ", checkedAt=" + riskCheck.getCheckedAt()
+                    + ", maxAgeMinutes=" + riskGuardProperties.maxRiskCheckAgeMinutes());
+        }
     }
 
     private OrderDraft calculateBuy(AiDecision decision, BigDecimal totalAsset, BigDecimal availableCash) {
@@ -210,7 +201,7 @@ public class OrderService {
                 currentPrice = quote.getCurrentPrice();
             }
         } catch (Exception e) {
-            log.warn("[Order] SELL 현재가 조회 실패, AI 판단가 사용: {}", e.getMessage());
+            log.warn("[Order] SELL current price lookup failed, using AI decision price: {}", e.getMessage());
         }
 
         boolean hasPreviousPartialSell = orderRequestMapper
@@ -219,10 +210,10 @@ public class OrderService {
                 decision, position, currentPrice, totalAsset, sellTrigger, hasPreviousPartialSell);
 
         var policy = riskPolicyConfigMapper.findByPolicyCode(DEFAULT_POLICY_CODE)
-                .orElseThrow(() -> new IllegalStateException("리스크 정책 없음: " + DEFAULT_POLICY_CODE));
+                .orElseThrow(() -> new IllegalStateException("risk policy not found: " + DEFAULT_POLICY_CODE));
         String failReason = sellRiskManager.check(decision, policy, position, calc.quantity(), sellTrigger);
         if (failReason != null) {
-            throw new IllegalStateException("SELL 리스크 실패: " + failReason);
+            throw new IllegalStateException("SELL risk check failed: " + failReason);
         }
         return new OrderDraft(calc.quantity(), calc.orderAmount(), calc.unitPrice());
     }
@@ -247,14 +238,11 @@ public class OrderService {
             return "SELL[" + sellTrigger.name() + "]: " +
                     (decision.getReason() != null ? decision.getReason() : "");
         }
-        return "AI 판단 기반 주문: " + decision.getReason();
+        return "AI decision based order: " + decision.getReason();
     }
 
     private record OrderDraft(int quantity, BigDecimal orderAmount, BigDecimal unitPrice) {}
 
-    /**
-     * 주문 목록 조회
-     */
     @Transactional(readOnly = true)
     public List<OrderRequest> getOrders(String mode, int limit) {
         return orderRequestMapper.findByAccountNo(
@@ -274,4 +262,3 @@ public class OrderService {
         return normalized;
     }
 }
-

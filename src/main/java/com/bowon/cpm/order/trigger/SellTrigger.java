@@ -4,5 +4,6 @@ public enum SellTrigger {
     AI_DECISION,
     TARGET_HIT_1,
     TARGET_HIT_2,
-    STOP_LOSS_HIT
+    STOP_LOSS_HIT,
+    BREAKEVEN_PROTECT
 }

@@ -45,6 +45,24 @@ cpm:
   liquidity:
     min-average-volume20: ${LIQUIDITY_MIN_AVERAGE_VOLUME20:100000}
     min-average-trading-value20: ${LIQUIDITY_MIN_AVERAGE_TRADING_VALUE20:3000000000}
+  risk:
+    guard:
+      max-risk-per-trade-rate: ${RISK_MAX_RISK_PER_TRADE_RATE:0.005}
+      daily-loss-limit-rate: ${RISK_DAILY_LOSS_LIMIT_RATE:0.015}
+      max-daily-stop-loss-count: ${RISK_MAX_DAILY_STOP_LOSS_COUNT:2}
+      same-stock-stop-loss-cooldown-hours: ${RISK_SAME_STOCK_STOP_LOSS_COOLDOWN_HOURS:24}
+      max-risk-check-age-minutes: ${RISK_MAX_RISK_CHECK_AGE_MINUTES:10}
+      market-loss-block-rate: ${RISK_MARKET_LOSS_BLOCK_RATE:-1.5}
+      sector-loss-block-rate: ${RISK_SECTOR_LOSS_BLOCK_RATE:-2.5}
+      realized-loss-cooldown-hours: ${RISK_REALIZED_LOSS_COOLDOWN_HOURS:48}
+      max-recent-realized-loss-count: ${RISK_MAX_RECENT_REALIZED_LOSS_COUNT:3}
+      breakeven-protect-buffer-rate: ${RISK_BREAKEVEN_PROTECT_BUFFER_RATE:0.002}
+      max-buy-rsi14: ${RISK_MAX_BUY_RSI14:75}
+      max-ma20-extension-rate: ${RISK_MAX_MA20_EXTENSION_RATE:0.12}
+      max-bollinger-upper-extension-rate: ${RISK_MAX_BOLLINGER_UPPER_EXTENSION_RATE:0.03}
+      min-cash-reserve-rate: ${RISK_MIN_CASH_RESERVE_RATE:0.20}
+      max-held-position-count: ${RISK_MAX_HELD_POSITION_COUNT:8}
+      max-sector-exposure-rate: ${RISK_MAX_SECTOR_EXPOSURE_RATE:0.35}
 
 # 외부 API 설정
 external:

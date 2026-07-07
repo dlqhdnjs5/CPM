@@ -45,7 +45,7 @@ public class SellOrderPolicyEngine {
             case TARGET_HIT_1 -> hasPreviousPartialSell
                     ? heldQuantity
                     : Math.max(1, heldQuantity / 2);
-            case TARGET_HIT_2, STOP_LOSS_HIT -> heldQuantity;
+            case TARGET_HIT_2, STOP_LOSS_HIT, BREAKEVEN_PROTECT -> heldQuantity;
         };
 
         if (quantity < 1) {

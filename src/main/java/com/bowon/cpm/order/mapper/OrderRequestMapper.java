@@ -4,6 +4,7 @@ import com.bowon.cpm.order.domain.OrderRequest;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,6 +48,18 @@ public interface OrderRequestMapper {
     boolean existsTodaySellByTrigger(
             @Param("aiDecisionId") Long aiDecisionId,
             @Param("trigger") String trigger
+    );
+
+    int countTodayStopLossSells(
+            @Param("accountNo") String accountNo,
+            @Param("brokerType") String brokerType
+    );
+
+    boolean existsRecentStopLossSellByStock(
+            @Param("accountNo") String accountNo,
+            @Param("brokerType") String brokerType,
+            @Param("stockCode") String stockCode,
+            @Param("since") LocalDateTime since
     );
 }
 
