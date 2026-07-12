@@ -81,8 +81,8 @@ spring:
       on-profile: test
   datasource:
     url: jdbc:mysql://localhost:3306/cpm?serverTimezone=Asia/Seoul&characterEncoding=utf8mb4
-    username: givememoney
-    password: givememoney1234
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
 mybatis:
@@ -195,7 +195,6 @@ dependencies {
 3. `application-test.yml` + `cleanup-feedback.sql` + Fixture/Abstract 클래스 작성
 4. sanity 테스트 1건(`select 1`)으로 DB 연결 + 롤백 동작 검증
 5. → Plan 16 진입
-
 
 
 

@@ -144,7 +144,7 @@ class AiDecisionServiceTest {
                 .thenReturn(Collections.emptyList());
         when(stockIndicatorDailyMapper.findLatestByStockCode("005930")).thenReturn(Optional.empty());
         when(fundamentalIndicatorService.findLatest("005930")).thenReturn(Optional.empty());
-        when(paperPortfolioService.findPositionAsPortfolio("80710174", "005930")).thenReturn(null);
+        when(paperPortfolioService.findPositionAsPortfolio("12345678", "005930")).thenReturn(null);
         when(aiFeedbackMapper.findRecentByStockCodeAndTypes(anyString(), any(List.class), any(Integer.class)))
                 .thenReturn(Collections.emptyList());
         when(aiPeriodicSummaryMapper.findLatestBySummaryType(anyString())).thenReturn(Optional.empty());
@@ -159,10 +159,10 @@ class AiDecisionServiceTest {
 
         when(tradingProperties.isPaperMode()).thenReturn(true);
         when(tradingProperties.normalizedMode()).thenReturn("PAPER");
-        when(kisProperties.accountNo()).thenReturn("80710174");
-        when(paperPortfolioService.findLatestAccountBalance("80710174"))
+        when(kisProperties.accountNo()).thenReturn("12345678");
+        when(paperPortfolioService.findLatestAccountBalance("12345678"))
                 .thenReturn(Optional.of(PaperAccountBalance.builder()
-                        .accountNo("80710174")
+                        .accountNo("12345678")
                         .baseDatetime(LocalDateTime.now())
                         .cashBalance(new BigDecimal("1000000"))
                         .availableCash(new BigDecimal("900000"))

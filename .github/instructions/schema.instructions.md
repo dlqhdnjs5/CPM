@@ -9,8 +9,8 @@ description: 'DB schema reference and schema-change rules'
 
 - Host: localhost:3306
 - Database: cpm
-- Username: givememoney
-- Password: givememoney1234
+- Username: set via `DB_USERNAME` or `application-local.yml`
+- Password: set via `DB_PASSWORD` or `application-local.yml`
 - Charset: utf8mb4 (utf8mb4_0900_ai_ci)
 
 ## Rules

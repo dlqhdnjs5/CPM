@@ -25,8 +25,8 @@
 - Host: localhost
 - Port: 3306
 - Database: cpm
-- Username: givememoney
-- Password: givememoney1234
+- Username: set via `DB_USERNAME` or `application-local.yml`
+- Password: set via `DB_PASSWORD` or `application-local.yml`
 
 ## 도메인 구조 (DB 기준)
 1. **종목/시장 데이터** - stock_master, stock_price_daily, stock_price_minute, stock_realtime_quote, stock_orderbook, stock_indicator_daily, stock_indicator_minute, market_index
