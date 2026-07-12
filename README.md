@@ -1,3 +1,7 @@
+<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/db7ce54c-4668-4ac5-86d6-480f01b3f672" />
+
+
+
 # CPM: AI 기반 주식 판단/자동매매 백엔드
 
 CPM(Copy Paste Money)은 주식 데이터를 수집하고, AI가 매매 판단을 생성한 뒤, 룰 기반 리스크 검증과 주문 정책을 통과한 경우에만 PAPER 또는 REAL 모드로 주문 흐름을 진행하는 백엔드 프로젝트입니다.
