@@ -1,6 +1,8 @@
 package com.bowon.cpm.common.config;
 
 import io.netty.channel.ChannelOption;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,8 +12,10 @@ import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.http.codec.ClientCodecConfigurer;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.HttpProtocol;
 import reactor.netty.http.client.HttpClient;
 
+import javax.net.ssl.SSLException;
 import java.time.Duration;
 
 @Configuration
@@ -47,7 +51,7 @@ public class WebClientConfig {
     ) {
         return builder
                 .baseUrl(baseUrl)
-                .clientConnector(connector())
+                .clientConnector(dartConnector())
                 // DART corpCode.xml ZIP 파일이 크므로 버퍼 크기를 10MB로 설정
                 .exchangeStrategies(exchangeStrategies(DART_BUFFER_SIZE))
                 .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
@@ -100,6 +104,26 @@ public class WebClientConfig {
                 .responseTimeout(Duration.ofSeconds(30)); // DART ZIP 다운로드 시간 고려해 30초로 늘림
 
         return new ReactorClientHttpConnector(httpClient);
+    }
+
+    private ReactorClientHttpConnector dartConnector() {
+        HttpClient httpClient = HttpClient.create()
+                .protocol(HttpProtocol.HTTP11)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
+                .responseTimeout(Duration.ofSeconds(30))
+                .secure(ssl -> ssl.sslContext(dartSslContext()));
+
+        return new ReactorClientHttpConnector(httpClient);
+    }
+
+    private SslContext dartSslContext() {
+        try {
+            return SslContextBuilder.forClient()
+                    .protocols("TLSv1.2")
+                    .build();
+        } catch (SSLException e) {
+            throw new IllegalStateException("Failed to create DART SSL context", e);
+        }
     }
 }
 

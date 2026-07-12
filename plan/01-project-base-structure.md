@@ -76,7 +76,7 @@
 
 ## Risks / Assumptions
 
-- DB: username=`givememoney`, password=`givememoney123` 확정
+- DB: username/password는 환경변수 또는 `application-local.yml`에서 설정
 - **실전투자 기준** — 모의투자 API 미사용. KIS 실전 base-url 사용 (`https://openapi.koreainvestment.com:9443`)
 - 주문 실행은 7단계(가상매매 PAPER 모드) 없이 바로 실전 API 호출 흐름으로 구현
 - Spring Boot 3.5.15-SNAPSHOT 버전 사용 중 → 안정 버전이 아니므로 의존성 해결 실패 가능성 있음 (사용자 판단)

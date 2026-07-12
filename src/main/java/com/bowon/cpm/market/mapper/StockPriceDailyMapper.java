@@ -25,6 +25,8 @@ public interface StockPriceDailyMapper {
             @Param("toDate") LocalDate toDate
     );
 
+    StockPriceDaily findLatestByStockCode(@Param("stockCode") String stockCode);
+
     /**
      * 기간 내 high_price MAX / low_price MIN / 마지막 종가를 한 행으로 반환.
      * 결과는 Map: { high: BigDecimal, low: BigDecimal, last_close: BigDecimal }
@@ -33,6 +35,11 @@ public interface StockPriceDailyMapper {
             @Param("stockCode") String stockCode,
             @Param("fromDate") LocalDate fromDate,
             @Param("toDate") LocalDate toDate
+    );
+
+    java.util.Map<String, Object> findRecentLiquidityAverage(
+            @Param("stockCode") String stockCode,
+            @Param("limit") int limit
     );
 }
 

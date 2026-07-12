@@ -12,7 +12,9 @@ import org.springframework.context.annotation.Configuration;
         KisProperties.class,
         DartProperties.class,
         NaverProperties.class,
-        OpenAiProperties.class
+        OpenAiProperties.class,
+        TradingProperties.class,
+        LiquidityProperties.class
 })
 public class PropertiesConfig {
 }

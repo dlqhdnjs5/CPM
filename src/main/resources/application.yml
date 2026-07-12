@@ -10,8 +10,8 @@ spring:
 
   datasource:
     url: jdbc:mysql://localhost:3306/cpm?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: ${DB_USERNAME:givememoney}
-    password: ${DB_PASSWORD:givememoney1234}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10
@@ -40,8 +40,11 @@ logging:
 # 트레이딩 설정
 cpm:
   trading:
-    mode: ${TRADING_MODE:REAL}
-    enabled: ${TRADING_ENABLED:true}
+    mode: ${TRADING_MODE:PAPER}
+    enabled: ${TRADING_ENABLED:false}
+  liquidity:
+    min-average-volume20: ${LIQUIDITY_MIN_AVERAGE_VOLUME20:100000}
+    min-average-trading-value20: ${LIQUIDITY_MIN_AVERAGE_TRADING_VALUE20:3000000000}
 
 # 외부 API 설정
 external:
@@ -72,9 +75,9 @@ external:
     api-key: ${OPENAI_API_KEY:찾아서 넣으세요}
     # 용도별 모델 분리
     # 초기 MVP: 비용 최소화 → 데이터 쌓은 후 단계적으로 상위 모델로 교체
-    model-decision: ${OPENAI_MODEL_DECISION:gpt-4.1-mini}      # 종목 매매 판단 (비용/성능 균형)
+    model-decision: ${OPENAI_MODEL_DECISION:gpt-5.4}      # 종목 매매 판단 (비용/성능 균형)
     model-summary: ${OPENAI_MODEL_SUMMARY:gpt-4.1-mini}        # 뉴스/공시 요약
-    model-review: ${OPENAI_MODEL_REVIEW:gpt-4.1}               # 고신뢰 후보 재검토 (confidence≥0.8 BUY)
+    model-review: ${OPENAI_MODEL_REVIEW:gpt-5.4}               # 고신뢰 후보 재검토 (confidence≥0.8 BUY)
 
 
 

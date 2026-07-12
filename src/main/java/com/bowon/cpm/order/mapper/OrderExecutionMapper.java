@@ -15,6 +15,7 @@ public interface OrderExecutionMapper {
 
     List<OrderExecution> findByStockCode(
             @Param("stockCode") String stockCode,
+            @Param("mode") String mode,
             @Param("limit") int limit
     );
 }

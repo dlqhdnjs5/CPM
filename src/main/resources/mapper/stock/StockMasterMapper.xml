@@ -29,8 +29,14 @@
         )
         ON DUPLICATE KEY UPDATE
             stock_name    = VALUES(stock_name),
-            sector_name   = VALUES(sector_name),
-            industry_name = VALUES(industry_name),
+            market_type   = CASE
+                                WHEN VALUES(market_type) IS NULL OR VALUES(market_type) = 'UNKNOWN'
+                                THEN market_type
+                                ELSE VALUES(market_type)
+                            END,
+            sector_name   = COALESCE(VALUES(sector_name), sector_name),
+            industry_name = COALESCE(VALUES(industry_name), industry_name),
+            corp_code     = COALESCE(VALUES(corp_code), corp_code),
             is_active     = VALUES(is_active),
             updated_at    = CURRENT_TIMESTAMP
     </insert>
@@ -70,6 +76,37 @@
         WHERE is_active = 1
         ORDER BY stock_code
     </select>
+
+    <select id="findAll" resultType="com.bowon.cpm.stock.domain.StockMaster">
+        SELECT
+            stock_code,
+            stock_name,
+            market_type,
+            sector_name,
+            industry_name,
+            corp_code,
+            is_active,
+            listed_date,
+            delisted_date,
+            created_at,
+            updated_at
+        FROM stock_master
+        ORDER BY stock_name, stock_code
+    </select>
+
+    <update id="updateMarketType">
+        UPDATE stock_master
+        SET market_type = #{marketType},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE stock_code = #{stockCode}
+    </update>
+
+    <update id="updateActive">
+        UPDATE stock_master
+        SET is_active = #{isActive},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE stock_code = #{stockCode}
+    </update>
 
 </mapper>
 

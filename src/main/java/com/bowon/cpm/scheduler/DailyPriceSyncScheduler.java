@@ -24,7 +24,7 @@ public class DailyPriceSyncScheduler {
     private final MarketDataService marketDataService;
     private final StockMasterMapper stockMasterMapper;
 
-    @Scheduled(cron = "0 35 8 * * MON-FRI")
+    @Scheduled(cron = "0 10 16 * * MON-FRI")
     public void run() {
         if (!logSupport.isWeekday() || logSupport.isAlreadyRunning(NAME)) return;
         Long logId = logSupport.start(NAME);

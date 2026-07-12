@@ -1,6 +1,7 @@
 package com.bowon.cpm.admin;
 
 import com.bowon.cpm.common.response.ApiResponse;
+import com.bowon.cpm.common.config.TradingProperties;
 import com.bowon.cpm.feedback.domain.AiFeedback;
 import com.bowon.cpm.feedback.domain.PortfolioProfitLoss;
 import com.bowon.cpm.feedback.service.FeedbackService;
@@ -18,6 +19,7 @@ public class FeedbackController {
 
     private final FeedbackService feedbackService;
     private final HoldingDayFeedbackScheduler holdingDayFeedbackScheduler;
+    private final TradingProperties tradingProperties;
 
     /**
      * AI 판단 단건 피드백 생성
@@ -59,6 +61,9 @@ public class FeedbackController {
      */
     @PostMapping("/portfolio/daily")
     public ApiResponse<Map<String, Object>> saveDailyProfitLoss() {
+        if (tradingProperties.isPaperMode()) {
+            return ApiResponse.error("PAPER mode uses paper_portfolio_profit_loss; use /api/admin/performance/paper");
+        }
         PortfolioProfitLoss result = feedbackService.saveDailyProfitLoss();
         return ApiResponse.ok("일간 수익률 저장 완료", Map.of(
                 "baseDate", result.getBaseDate().toString(),

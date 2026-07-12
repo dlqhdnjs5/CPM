@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPM Dashboard</title>
+  <link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Copy Paste Money</p>
+      <h1>CPM Dashboard</h1>
+    </div>
+    <div class="topbar-actions">
+      <span id="lastUpdated" class="muted">-</span>
+      <button id="refreshButton" class="button primary" type="button">Refresh</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <aside class="side-menu" aria-label="Dashboard menu">
+      <a href="#overview">Overview</a>
+      <a href="#active-stocks">분석 종목</a>
+      <a href="#actions">Actions</a>
+      <a href="#portfolio">Portfolio</a>
+      <a href="#ai-orders">AI / Orders</a>
+      <a href="#trade-history">Trade History</a>
+      <a href="#operations">Operations</a>
+    </aside>
+
+    <div class="content">
+      <section id="overview" class="section" aria-label="System status">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Current State</p>
+            <h2>Overview</h2>
+          </div>
+        </div>
+        <div class="status-grid">
+          <article class="metric">
+            <span class="metric-label">Mode</span>
+            <strong id="tradingMode">-</strong>
+            <small id="tradingEnabled">-</small>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Account Total</span>
+            <strong id="paperTotal">-</strong>
+            <small id="paperReturn">-</small>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Total P/L</span>
+            <strong id="totalProfitLoss">-</strong>
+            <small id="totalProfitLossRate">-</small>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Available Cash</span>
+            <strong id="availableCash">-</strong>
+            <small id="accountNo">-</small>
+          </article>
+          <article class="metric">
+            <span class="metric-label">Active Stocks</span>
+            <strong id="activeStockCount">-</strong>
+            <small id="positionCount">-</small>
+          </article>
+        </div>
+      </section>
+
+      <section id="active-stocks" class="section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Stock Universe</p>
+            <h2>분석 대상 종목</h2>
+          </div>
+          <span id="activeStockBadge" class="badge">0</span>
+        </div>
+        <div class="stock-manager">
+          <div class="stock-form">
+            <div class="field stock-search-field">
+              <label for="stockSearchInput">종목 검색</label>
+              <input id="stockSearchInput" placeholder="삼성, 하이닉스, 005930">
+            </div>
+          </div>
+          <div id="stockCandidateList" class="candidate-list"></div>
+          <div id="stockMasterList" class="stock-list"></div>
+        </div>
+      </section>
+
+      <section id="actions" class="section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Manual Controls</p>
+            <h2>Actions</h2>
+          </div>
+          <span id="actionStatus" class="action-status">Ready</span>
+        </div>
+        <div class="action-panel">
+          <div class="field compact">
+            <label for="seedCashInput">Seed Cash</label>
+            <input id="seedCashInput" inputmode="decimal" value="10000000">
+          </div>
+          <button id="initPaperButton" class="button" type="button">Init PAPER</button>
+          <div class="field compact">
+            <label for="stockCodeInput">Stock Code</label>
+            <input id="stockCodeInput" inputmode="numeric" placeholder="005930">
+          </div>
+          <button id="runAiButton" class="button" type="button">Run AI</button>
+          <div class="field compact">
+            <label for="decisionIdInput">Decision ID</label>
+            <input id="decisionIdInput" inputmode="numeric" placeholder="1">
+          </div>
+          <button id="riskButton" class="button" type="button">Risk</button>
+          <button id="orderButton" class="button" type="button">Order</button>
+        </div>
+      </section>
+
+      <section id="portfolio" class="section">
+        <div class="panel-head">
+          <h2>Portfolio</h2>
+          <span id="portfolioBadge" class="badge">PAPER</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Stock</th>
+                <th class="num">Qty</th>
+                <th class="num">Avg</th>
+                <th class="num">Now</th>
+                <th class="num">Value</th>
+                <th class="num">P/L</th>
+              </tr>
+            </thead>
+            <tbody id="positionsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="ai-orders" class="section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Decision Flow</p>
+            <h2>AI / Orders</h2>
+          </div>
+        </div>
+        <div class="section-grid">
+          <article class="panel">
+            <div class="panel-head">
+              <h2>AI Decisions</h2>
+              <div class="decision-counts">
+                <span id="buyCount" class="pill buy">BUY 0</span>
+                <span id="holdCount" class="pill hold">HOLD 0</span>
+                <span id="sellCount" class="pill sell">SELL 0</span>
+              </div>
+            </div>
+            <div id="decisionsList" class="list"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Risk / Orders</h2>
+              <span id="riskFailCount" class="badge danger">0 fail</span>
+            </div>
+            <div id="flowList" class="list"></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="trade-history" class="section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">BUY / SELL Timeline</p>
+            <h2>AI Trade History</h2>
+          </div>
+          <div class="segmented" role="group" aria-label="Trade history filter">
+            <button class="segment active" type="button" data-history-filter="ALL">All</button>
+            <button class="segment" type="button" data-history-filter="BUY">AI BUY</button>
+            <button class="segment" type="button" data-history-filter="SELL">AI SELL</button>
+            <button class="segment" type="button" data-history-filter="BUY_FILLED">BUY Filled</button>
+            <button class="segment" type="button" data-history-filter="SELL_FILLED">SELL Filled</button>
+          </div>
+        </div>
+        <div class="history-wrap">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Stock</th>
+                <th>Decision</th>
+                <th class="num">Confidence</th>
+                <th>Risk</th>
+                <th>Order</th>
+              </tr>
+            </thead>
+            <tbody id="tradeHistoryBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="operations" class="section">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Runtime Health</p>
+            <h2>Operations</h2>
+          </div>
+        </div>
+        <div class="section-grid">
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Schedulers</h2>
+              <span class="badge">recent</span>
+            </div>
+            <div id="schedulerList" class="list compact-list"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h2>Recent Failures</h2>
+              <span class="badge danger">API</span>
+            </div>
+            <div id="failureList" class="failure-grid"></div>
+          </article>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="/dashboard.js"></script>
+</body>
+</html>

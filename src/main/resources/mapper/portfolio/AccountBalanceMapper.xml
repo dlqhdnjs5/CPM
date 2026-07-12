@@ -37,7 +37,7 @@
         FROM account_balance
         WHERE account_no = #{accountNo}
         ORDER BY base_datetime DESC
-        LIMIT 1
+        LIMIT 2
     </select>
 
 </mapper>

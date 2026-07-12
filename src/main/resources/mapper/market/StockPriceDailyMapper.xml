@@ -10,7 +10,7 @@
         - 이미 존재하는 날짜는 건너뜀 (중복 무시)
     -->
     <insert id="insertBatch" parameterType="java.util.List">
-        INSERT IGNORE INTO stock_price_daily (
+        INSERT INTO stock_price_daily (
             stock_code,
             trade_date,
             open_price,
@@ -34,6 +34,14 @@
             #{item.source}
         )
         </foreach>
+        ON DUPLICATE KEY UPDATE
+            open_price = VALUES(open_price),
+            high_price = VALUES(high_price),
+            low_price = VALUES(low_price),
+            close_price = VALUES(close_price),
+            volume = VALUES(volume),
+            trading_value = VALUES(trading_value),
+            source = VALUES(source)
     </insert>
 
     <!--
@@ -59,6 +67,25 @@
         ORDER BY trade_date DESC
     </select>
 
+    <select id="findLatestByStockCode"
+            resultType="com.bowon.cpm.market.domain.StockPriceDaily">
+        SELECT
+            id,
+            stock_code,
+            trade_date,
+            open_price,
+            high_price,
+            low_price,
+            close_price,
+            volume,
+            trading_value,
+            source
+        FROM stock_price_daily
+        WHERE stock_code = #{stockCode}
+        ORDER BY trade_date DESC
+        LIMIT 1
+    </select>
+
     <!--
         기간 내 최고가/최저가/마지막 종가 집계
         - high: 기간 중 최고가
@@ -80,6 +107,20 @@
         FROM stock_price_daily
         WHERE stock_code = #{stockCode}
           AND trade_date BETWEEN #{fromDate} AND #{toDate}
+    </select>
+
+    <select id="findRecentLiquidityAverage" resultType="map">
+        SELECT
+            AVG(volume) AS average_volume,
+            AVG(trading_value) AS average_trading_value,
+            COUNT(*) AS sample_count
+        FROM (
+            SELECT volume, trading_value
+            FROM stock_price_daily
+            WHERE stock_code = #{stockCode}
+            ORDER BY trade_date DESC
+            LIMIT #{limit}
+        ) recent
     </select>
 
 </mapper>

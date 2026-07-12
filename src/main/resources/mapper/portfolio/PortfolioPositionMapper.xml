@@ -71,6 +71,28 @@
         ORDER BY valuation_amount DESC
     </select>
 
+    <select id="findAllHeld" parameterType="string"
+            resultType="com.bowon.cpm.portfolio.domain.PortfolioPosition">
+        SELECT
+            id,
+            account_no,
+            stock_code,
+            stock_name,
+            quantity,
+            available_quantity,
+            average_buy_price,
+            current_price,
+            purchase_amount,
+            valuation_amount,
+            profit_loss_amount,
+            profit_loss_rate,
+            updated_at
+        FROM portfolio_position
+        WHERE account_no = #{accountNo}
+          AND quantity &gt; 0
+        ORDER BY valuation_amount DESC
+    </select>
+
     <select id="findByAccountNoAndStockCode"
             resultType="com.bowon.cpm.portfolio.domain.PortfolioPosition">
         SELECT id, account_no, stock_code, stock_name,

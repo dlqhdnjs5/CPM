@@ -21,6 +21,7 @@ public class RiskCheckResult {
     private Long id;
     private Long aiDecisionId;
     private String policyCode;
+    private String tradingMode;
     private String accountNo;
     private String stockCode;
     /** true = 통과, false = 차단 */

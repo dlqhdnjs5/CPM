@@ -16,6 +16,8 @@ public interface PortfolioPositionMapper {
 
     List<PortfolioPosition> findByAccountNo(String accountNo);
 
+    List<PortfolioPosition> findAllHeld(String accountNo);
+
     /** 계좌번호 + 종목코드로 단건 조회 */
     Optional<PortfolioPosition> findByAccountNoAndStockCode(
             @Param("accountNo") String accountNo,

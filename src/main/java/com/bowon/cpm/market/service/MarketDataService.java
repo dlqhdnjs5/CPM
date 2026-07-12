@@ -17,8 +17,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -34,8 +36,11 @@ public class MarketDataService {
     private final StockPriceDailyMapper stockPriceDailyMapper;
     private final BrokerApiLogMapper brokerApiLogMapper;
     private final StockService stockService;
+    private final Clock clock;
 
     private static final DateTimeFormatter KIS_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final LocalTime DAILY_CANDLE_AVAILABLE_TIME = LocalTime.of(15, 40);
+    private static final String UNKNOWN_MARKET_TYPE = "UNKNOWN";
 
     /**
      * 현재가 조회 후 stock_realtime_quote 저장
@@ -60,6 +65,7 @@ public class MarketDataService {
                     .accumulatedVolume(result.getAccumulatedVolume())
                     .tradingValue(result.getTradingValue())
                     .build());
+            upsertStockMasterIfNamePresent(stockCode, result.getStockName());
 
             log.info("[Market] 현재가 저장 완료: stockCode={}, price={}", stockCode, result.getCurrentPrice());
 
@@ -102,27 +108,32 @@ public class MarketDataService {
             // KIS 응답 → StockPriceDaily 변환
             List<StockPriceDaily> dailyList = response.output2().stream()
                     .filter(o -> o.tradeDate() != null && !o.tradeDate().isBlank())
-                    .map(o -> StockPriceDaily.builder()
-                            .stockCode(stockCode)
-                            .tradeDate(LocalDate.parse(o.tradeDate(), KIS_DATE_FORMAT))
-                            .openPrice(parseBigDecimal(o.openPrice()))
-                            .highPrice(parseBigDecimal(o.highPrice()))
-                            .lowPrice(parseBigDecimal(o.lowPrice()))
-                            .closePrice(parseBigDecimal(o.closePrice()))
-                            .volume(parseLong(o.volume()))
-                            .tradingValue(parseBigDecimal(o.tradingValue()))
-                            .source("KIS")
-                            .build())
+                    .map(o -> {
+                        BigDecimal closePrice = parseBigDecimal(o.closePrice());
+                        Long volume = parseLong(o.volume());
+                        return StockPriceDaily.builder()
+                                .stockCode(stockCode)
+                                .tradeDate(LocalDate.parse(o.tradeDate(), KIS_DATE_FORMAT))
+                                .openPrice(parseBigDecimal(o.openPrice()))
+                                .highPrice(parseBigDecimal(o.highPrice()))
+                                .lowPrice(parseBigDecimal(o.lowPrice()))
+                                .closePrice(closePrice)
+                                .volume(volume)
+                                .tradingValue(calculateTradingValue(closePrice, volume))
+                                .source("KIS")
+                                .build();
+                    })
+                    .filter(this::isConfirmedDailyPrice)
                     .collect(Collectors.toList());
 
-            // 배치 INSERT IGNORE
+            // Upsert so an early partial daily candle can be corrected by a later fetch.
             if (!dailyList.isEmpty()) {
                 stockPriceDailyMapper.insertBatch(dailyList);
                 savedCount = dailyList.size();
             }
 
             // stock_master upsert (종목명은 현재가 응답에서 가져오지 못하므로 코드만 저장)
-            stockService.upsertStockMaster(stockCode, stockCode, "KOSPI");
+            stockService.upsertStockMaster(stockCode, resolveStockName(stockCode), UNKNOWN_MARKET_TYPE);
 
             success = true;
             log.info("[Market] 일봉 저장 완료: stockCode={}, count={}", stockCode, savedCount);
@@ -168,6 +179,44 @@ public class MarketDataService {
         }
     }
 
+    private void upsertStockMasterIfNamePresent(String stockCode, String stockName) {
+        if (hasUsableStockName(stockName, stockCode)) {
+            stockService.upsertStockMaster(stockCode, stockName, UNKNOWN_MARKET_TYPE);
+        }
+    }
+
+    private String resolveStockName(String stockCode) {
+        try {
+            StockQuoteResult quote = brokerClient.getCurrentPrice(stockCode);
+            if (quote != null && hasUsableStockName(quote.getStockName(), stockCode)) {
+                return quote.getStockName();
+            }
+        } catch (Exception e) {
+            log.warn("[Market] stock name lookup failed: stockCode={}, error={}", stockCode, e.getMessage());
+        }
+        return stockService.findByStockCode(stockCode)
+                .map(stock -> stock.getStockName())
+                .filter(name -> hasUsableStockName(name, stockCode))
+                .orElse(stockCode);
+    }
+
+    private boolean hasUsableStockName(String stockName, String stockCode) {
+        return stockName != null && !stockName.isBlank() && !stockName.equals(stockCode);
+    }
+
+    private boolean isConfirmedDailyPrice(StockPriceDaily dailyPrice) {
+        LocalDate tradeDate = dailyPrice.getTradeDate();
+        if (tradeDate == null) {
+            return false;
+        }
+
+        LocalDate today = LocalDate.now(clock);
+        if (tradeDate.isAfter(today)) {
+            return false;
+        }
+        return !tradeDate.isEqual(today) || !LocalTime.now(clock).isBefore(DAILY_CANDLE_AVAILABLE_TIME);
+    }
+
     private BigDecimal parseBigDecimal(String value) {
         if (value == null || value.isBlank()) return null;
         try {
@@ -184,5 +233,12 @@ public class MarketDataService {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    private BigDecimal calculateTradingValue(BigDecimal closePrice, Long volume) {
+        if (closePrice == null || volume == null) {
+            return null;
+        }
+        return closePrice.multiply(BigDecimal.valueOf(volume));
     }
 }

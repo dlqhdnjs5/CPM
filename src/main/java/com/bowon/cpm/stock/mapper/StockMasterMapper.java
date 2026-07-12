@@ -2,6 +2,7 @@ package com.bowon.cpm.stock.mapper;
 
 import com.bowon.cpm.stock.domain.StockMaster;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,5 +17,11 @@ public interface StockMasterMapper {
 
     /** 활성 종목 전체 조회 */
     List<StockMaster> findAllActive();
+
+    List<StockMaster> findAll();
+
+    int updateMarketType(@Param("stockCode") String stockCode, @Param("marketType") String marketType);
+
+    int updateActive(@Param("stockCode") String stockCode, @Param("isActive") boolean isActive);
 }
 

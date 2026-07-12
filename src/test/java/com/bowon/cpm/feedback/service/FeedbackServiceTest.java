@@ -341,6 +341,27 @@ class FeedbackServiceTest {
         verify(aiPeriodicSummaryMapper, times(1)).insertIgnore(any(AiPeriodicSummary.class));
     }
 
+    @Test
+    @DisplayName("DAILY SELL target not reached but price declined -> success=true")
+    void evaluateDecision_DAILY_SELL_directionSuccessBeforeTarget() {
+        AiDecision d = AiDecisionFixture.sell(31L,
+                new BigDecimal("289000"),
+                new BigDecimal("260000"),
+                new BigDecimal("300000"));
+        when(aiDecisionMapper.findById(31L)).thenReturn(Optional.of(d));
+        when(brokerClient.getCurrentPrice("TEST_001"))
+                .thenReturn(StockQuoteResult.builder()
+                        .currentPrice(new BigDecimal("283000"))
+                        .build());
+
+        AiFeedback fb = feedbackService.evaluateDecision(31L, "DAILY");
+
+        assertThat(fb.getTargetReached()).isFalse();
+        assertThat(fb.getStopLossReached()).isFalse();
+        assertThat(fb.getSuccess()).isTrue();
+        assertThat(fb.getReturnRate()).isEqualByComparingTo(new BigDecimal("2.0761"));
+    }
+
     // ===== helpers =====
 
     private OpenAiResponse stubOpenAiResponse(String text) {

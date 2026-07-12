@@ -22,5 +22,12 @@
             is_parsed = 0
         WHERE id = #{id}
     </update>
+
+    <update id="updateParsedSuccess">
+        UPDATE ai_decision_raw_response
+        SET is_parsed = 1,
+            parse_error = NULL
+        WHERE id = #{id}
+    </update>
 </mapper>
 

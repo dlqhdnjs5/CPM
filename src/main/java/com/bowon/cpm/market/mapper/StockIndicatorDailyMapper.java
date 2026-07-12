@@ -9,6 +9,8 @@ import java.util.Optional;
 @Mapper
 public interface StockIndicatorDailyMapper {
 
+    void upsert(StockIndicatorDaily indicator);
+
     /** 종목별 최신 기술적 지표 1건 (없으면 empty) */
     Optional<StockIndicatorDaily> findLatestByStockCode(@Param("stockCode") String stockCode);
 }

@@ -2,6 +2,7 @@ package com.bowon.cpm.admin;
 
 import com.bowon.cpm.feedback.domain.AiPeriodicSummary;
 import com.bowon.cpm.feedback.service.FeedbackService;
+import com.bowon.cpm.common.config.TradingProperties;
 import com.bowon.cpm.scheduler.HoldingDayFeedbackScheduler;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,7 @@ class FeedbackControllerTest {
 
     @MockBean FeedbackService feedbackService;
     @MockBean HoldingDayFeedbackScheduler holdingDayFeedbackScheduler;
+    @MockBean TradingProperties tradingProperties;
 
     @Test
     @DisplayName("POST /api/feedback/holding-day/run → 200 + scheduler.run() 호출")

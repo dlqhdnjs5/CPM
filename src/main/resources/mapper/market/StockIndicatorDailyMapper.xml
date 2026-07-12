@@ -3,6 +3,36 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.bowon.cpm.market.mapper.StockIndicatorDailyMapper">
 
+    <insert id="upsert" parameterType="com.bowon.cpm.market.domain.StockIndicatorDaily">
+        INSERT INTO stock_indicator_daily (
+            stock_code, trade_date,
+            ma5, ma20, ma60, ma120,
+            rsi14, macd, macd_signal, macd_histogram,
+            bollinger_upper, bollinger_middle, bollinger_lower,
+            volatility, volume_change_rate
+        ) VALUES (
+            #{stockCode}, #{tradeDate},
+            #{ma5}, #{ma20}, #{ma60}, #{ma120},
+            #{rsi14}, #{macd}, #{macdSignal}, #{macdHistogram},
+            #{bollingerUpper}, #{bollingerMiddle}, #{bollingerLower},
+            #{volatility}, #{volumeChangeRate}
+        )
+        ON DUPLICATE KEY UPDATE
+            ma5 = VALUES(ma5),
+            ma20 = VALUES(ma20),
+            ma60 = VALUES(ma60),
+            ma120 = VALUES(ma120),
+            rsi14 = VALUES(rsi14),
+            macd = VALUES(macd),
+            macd_signal = VALUES(macd_signal),
+            macd_histogram = VALUES(macd_histogram),
+            bollinger_upper = VALUES(bollinger_upper),
+            bollinger_middle = VALUES(bollinger_middle),
+            bollinger_lower = VALUES(bollinger_lower),
+            volatility = VALUES(volatility),
+            volume_change_rate = VALUES(volume_change_rate)
+    </insert>
+
     <!-- 종목별 최신 1건 (인덱스: uk_stock_indicator_daily_stock_date) -->
     <select id="findLatestByStockCode"
             resultType="com.bowon.cpm.market.domain.StockIndicatorDaily">

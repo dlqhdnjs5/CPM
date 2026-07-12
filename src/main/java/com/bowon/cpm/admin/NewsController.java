@@ -2,6 +2,7 @@ package com.bowon.cpm.admin;
 
 import com.bowon.cpm.common.response.ApiResponse;
 import com.bowon.cpm.news.domain.StockNews;
+import com.bowon.cpm.news.service.NewsAnalysisService;
 import com.bowon.cpm.news.service.NewsCollectService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -15,6 +16,7 @@ import java.util.Map;
 public class NewsController {
 
     private final NewsCollectService newsCollectService;
+    private final NewsAnalysisService newsAnalysisService;
 
     /**
      * 종목 뉴스 수집
@@ -44,6 +46,18 @@ public class NewsController {
             @RequestParam(defaultValue = "20") int limit
     ) {
         return ApiResponse.ok(newsCollectService.getNews(stockCode, limit));
+    }
+
+    @PostMapping("/news/analyze")
+    public ApiResponse<Map<String, Object>> analyzeNews(
+            @RequestParam(defaultValue = "50") int limit
+    ) {
+        NewsAnalysisService.AnalysisBatchResult result = newsAnalysisService.analyzePending(limit);
+        return ApiResponse.ok("뉴스 요약/감성 분석 완료", Map.of(
+                "requested", result.requested(),
+                "saved", result.saved(),
+                "failed", result.failed()
+        ));
     }
 }
 

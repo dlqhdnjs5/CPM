@@ -13,5 +13,8 @@ public interface AiDecisionRawResponseMapper {
             @Param("id") Long id,
             @Param("parseError") String parseError
     );
+
+    /** 파싱 성공 시 is_parsed = 1, parse_error = NULL 로 정리 */
+    void updateParsedSuccess(@Param("id") Long id);
 }
 

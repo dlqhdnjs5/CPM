@@ -6,12 +6,12 @@
     <insert id="insert" parameterType="com.bowon.cpm.risk.domain.RiskCheckResult"
             useGeneratedKeys="true" keyProperty="id">
         INSERT INTO risk_check_result (
-            ai_decision_id, policy_code, account_no, stock_code,
+            ai_decision_id, policy_code, trading_mode, account_no, stock_code,
             passed, fail_reason,
             available_cash, expected_order_amount, max_position_amount, current_position_amount,
             confidence, risk_reward_ratio, checked_at
         ) VALUES (
-            #{aiDecisionId}, #{policyCode}, #{accountNo}, #{stockCode},
+            #{aiDecisionId}, #{policyCode}, #{tradingMode}, #{accountNo}, #{stockCode},
             #{passed}, #{failReason},
             #{availableCash}, #{expectedOrderAmount}, #{maxPositionAmount}, #{currentPositionAmount},
             #{confidence}, #{riskRewardRatio}, NOW()
@@ -20,13 +20,34 @@
 
     <!-- AI 판단 ID 기준 최신 리스크 검증 결과 -->
     <select id="findLatestByAiDecisionId" resultType="com.bowon.cpm.risk.domain.RiskCheckResult">
-        SELECT id, ai_decision_id, policy_code, account_no, stock_code,
+        SELECT id, ai_decision_id, policy_code, trading_mode, account_no, stock_code,
                passed, fail_reason, available_cash, expected_order_amount,
                max_position_amount, current_position_amount, confidence, risk_reward_ratio, checked_at
         FROM risk_check_result
         WHERE ai_decision_id = #{aiDecisionId}
         ORDER BY checked_at DESC
         LIMIT 1
+    </select>
+
+    <select id="findLatestByAiDecisionIdAndTradingMode"
+            resultType="com.bowon.cpm.risk.domain.RiskCheckResult">
+        SELECT id, ai_decision_id, policy_code, trading_mode, account_no, stock_code,
+               passed, fail_reason, available_cash, expected_order_amount,
+               max_position_amount, current_position_amount, confidence, risk_reward_ratio, checked_at
+        FROM risk_check_result
+        WHERE ai_decision_id = #{aiDecisionId}
+          AND trading_mode = #{tradingMode}
+        ORDER BY checked_at DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findRecent" resultType="com.bowon.cpm.risk.domain.RiskCheckResult">
+        SELECT id, ai_decision_id, policy_code, trading_mode, account_no, stock_code,
+               passed, fail_reason, available_cash, expected_order_amount,
+               max_position_amount, current_position_amount, confidence, risk_reward_ratio, checked_at
+        FROM risk_check_result
+        ORDER BY checked_at DESC, id DESC
+        LIMIT #{limit}
     </select>
 
 </mapper>

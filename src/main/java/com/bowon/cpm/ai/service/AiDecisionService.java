@@ -10,6 +10,8 @@ import com.bowon.cpm.ai.prompt.AiDecisionPromptBuilder;
 import com.bowon.cpm.broker.BrokerClient;
 import com.bowon.cpm.broker.dto.AccountBalanceResult;
 import com.bowon.cpm.broker.dto.StockQuoteResult;
+import com.bowon.cpm.broker.kis.KisProperties;
+import com.bowon.cpm.common.config.TradingProperties;
 import com.bowon.cpm.feedback.domain.AiFeedback;
 import com.bowon.cpm.feedback.domain.AiPeriodicSummary;
 import com.bowon.cpm.feedback.mapper.AiFeedbackMapper;
@@ -21,13 +23,25 @@ import com.bowon.cpm.dart.domain.DartMajorEvent;
 import com.bowon.cpm.dart.mapper.DartDisclosureMapper;
 import com.bowon.cpm.dart.mapper.DartMajorEventMapper;
 import com.bowon.cpm.dart.service.DartFinancialService;
+import com.bowon.cpm.fundamental.domain.StockFundamentalIndicator;
+import com.bowon.cpm.fundamental.service.FundamentalIndicatorService;
 import com.bowon.cpm.market.domain.StockIndicatorDaily;
+import com.bowon.cpm.market.domain.MarketContext;
 import com.bowon.cpm.market.domain.StockPriceDaily;
+import com.bowon.cpm.market.domain.StockSupplyDemandDaily;
 import com.bowon.cpm.market.mapper.StockIndicatorDailyMapper;
 import com.bowon.cpm.market.mapper.StockPriceDailyMapper;
+import com.bowon.cpm.market.mapper.StockSupplyDemandDailyMapper;
+import com.bowon.cpm.market.service.MarketContextService;
+import com.bowon.cpm.macro.domain.MacroContext;
+import com.bowon.cpm.macro.service.MacroContextService;
 import com.bowon.cpm.news.domain.StockNews;
 import com.bowon.cpm.news.mapper.StockNewsMapper;
+import com.bowon.cpm.paper.service.PaperPortfolioService;
+import com.bowon.cpm.portfolio.domain.PortfolioPosition;
+import com.bowon.cpm.portfolio.mapper.PortfolioPositionMapper;
 import com.bowon.cpm.stock.service.StockService;
+import com.bowon.cpm.stock.domain.StockMaster;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -68,13 +82,21 @@ public class AiDecisionService {
     private final AiDecisionParser parser;
 
     private final BrokerClient brokerClient;
+    private final TradingProperties tradingProperties;
+    private final PaperPortfolioService paperPortfolioService;
+    private final KisProperties kisProperties;
     private final StockService stockService;
     private final StockPriceDailyMapper stockPriceDailyMapper;
     private final StockIndicatorDailyMapper stockIndicatorDailyMapper;
+    private final StockSupplyDemandDailyMapper stockSupplyDemandDailyMapper;
+    private final MarketContextService marketContextService;
     private final StockNewsMapper stockNewsMapper;
     private final DartDisclosureMapper dartDisclosureMapper;
     private final DartMajorEventMapper dartMajorEventMapper;
     private final DartFinancialService dartFinancialService;
+    private final FundamentalIndicatorService fundamentalIndicatorService;
+    private final PortfolioPositionMapper portfolioPositionMapper;
+    private final MacroContextService macroContextService;
 
     // 조회용 (insert/update는 persistService 위임)
     private final AiDecisionMapper decisionMapper;
@@ -116,7 +138,12 @@ public class AiDecisionService {
                     input.totalAsset, input.availableCash,
                     input.recentFeedbacks, input.financialSummary, input.majorEvents,
                     input.indicator, input.realtimeQuote,
-                    input.weeklySummary, input.monthlySummary
+                    input.weeklySummary, input.monthlySummary,
+                    input.position, input.fundamentalIndicator,
+                    input.marketContext,
+                    input.macroContext,
+                    input.supplyDemand,
+                    tradingProperties.normalizedMode()
             );
 
             // 4. prompt log 저장
@@ -155,6 +182,7 @@ public class AiDecisionService {
             AiTradeDecisionJson parsed;
             try {
                 parsed = parser.parse(responseText);
+                persistService.updateParsedSuccess(rawResponse.getId());
             } catch (Exception e) {
                 log.error("[AI] 파싱 실패: stockCode={}, error={}", stockCode, e.getMessage());
                 persistService.updateParseError(rawResponse.getId(), e.getMessage());
@@ -263,8 +291,30 @@ public class AiDecisionService {
                 null, "기술적 지표 조회");
 
         // 재무 요약
+        d.supplyDemand = safeCall(
+                () -> stockSupplyDemandDailyMapper.findLatestByStockCode(stockCode).orElse(null),
+                null, "supply demand lookup");
+
+        StockMaster stockMaster = safeCall(
+                () -> stockService.findByStockCode(stockCode).orElse(null),
+                null, "stock master lookup");
+        d.marketContext = safeCall(
+                () -> marketContextService.latestContext(
+                        stockMaster != null ? stockMaster.getMarketType() : null,
+                        stockMaster != null ? stockMaster.getSectorName() : null),
+                null, "market context lookup");
+
         d.financialSummary = safeCall(() -> dartFinancialService.summarize(stockCode),
                 null, "재무 요약");
+        d.fundamentalIndicator = safeCall(
+                () -> fundamentalIndicatorService.findLatest(stockCode).orElse(null),
+                null, "fundamental indicator lookup");
+        d.position = safeCall(
+                () -> loadPositionForCurrentMode(stockCode),
+                null, "portfolio position lookup");
+        d.macroContext = safeCall(
+                macroContextService::latestContext,
+                null, "macro context lookup");
 
         // 피드백 (Plan 14 Phase 1: DAILY 제외)
         d.recentFeedbacks = safeCall(() -> aiFeedbackMapper.findRecentByStockCodeAndTypes(
@@ -281,7 +331,7 @@ public class AiDecisionService {
 
         // 계좌 잔고
         try {
-            AccountBalanceResult balance = brokerClient.getAccountBalance();
+            AccountBalanceResult balance = loadPromptAccountBalance();
             if (balance != null) {
                 d.totalAsset = balance.getTotalAssetAmount();
                 d.availableCash = balance.getAvailableCash();
@@ -301,6 +351,18 @@ public class AiDecisionService {
         }
 
         return d;
+    }
+
+    private PortfolioPosition loadPositionForCurrentMode(String stockCode) {
+        String accountNo = kisProperties.accountNo();
+        if (accountNo == null || accountNo.isBlank()) {
+            return null;
+        }
+        if (tradingProperties.isPaperMode()) {
+            return paperPortfolioService.findPositionAsPortfolio(accountNo, stockCode);
+        }
+        return portfolioPositionMapper.findByAccountNoAndStockCode(accountNo, stockCode)
+                .orElse(null);
     }
 
     // ===========================================================================
@@ -382,6 +444,23 @@ public class AiDecisionService {
         }
     }
 
+    private AccountBalanceResult loadPromptAccountBalance() {
+        if (tradingProperties.isPaperMode()) {
+            return paperPortfolioService.findLatestAccountBalance(kisProperties.accountNo())
+                    .map(balance -> AccountBalanceResult.builder()
+                            .accountNo(balance.getAccountNo())
+                            .cashBalance(balance.getCashBalance())
+                            .availableCash(balance.getAvailableCash())
+                            .totalAssetAmount(balance.getTotalAssetAmount())
+                            .totalEvaluationAmount(balance.getTotalEvaluationAmount())
+                            .totalProfitLossAmount(balance.getTotalProfitLossAmount())
+                            .totalProfitLossRate(balance.getTotalProfitLossRate())
+                            .build())
+                    .orElse(null);
+        }
+        return brokerClient.getAccountBalance();
+    }
+
     private <T> T safeCall(java.util.function.Supplier<T> supplier, T fallback, String label) {
         try {
             T r = supplier.get();
@@ -399,11 +478,16 @@ public class AiDecisionService {
         List<DartMajorEvent> majorEvents = Collections.emptyList();
         List<AiFeedback> recentFeedbacks = Collections.emptyList();
         StockIndicatorDaily indicator;
+        PortfolioPosition position;
+        StockFundamentalIndicator fundamentalIndicator;
         String financialSummary;
         BigDecimal totalAsset;
         BigDecimal availableCash;
         BigDecimal realtimeQuote;
         AiPeriodicSummary weeklySummary;
         AiPeriodicSummary monthlySummary;
+        MacroContext macroContext;
+        MarketContext marketContext;
+        StockSupplyDemandDaily supplyDemand;
     }
 }

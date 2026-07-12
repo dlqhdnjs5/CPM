@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.feedback.mapper.PortfolioRealizedProfitLossMapper">
+
+    <insert id="insertIgnore"
+            parameterType="com.bowon.cpm.feedback.domain.PortfolioRealizedProfitLoss"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT IGNORE INTO portfolio_realized_profit_loss (
+            order_execution_id, order_request_id, broker_order_no,
+            account_no, stock_code, executed_quantity,
+            average_buy_price, executed_price,
+            buy_amount, sell_amount, realized_profit_loss, return_rate,
+            realized_at, created_at
+        ) VALUES (
+            #{orderExecutionId}, #{orderRequestId}, #{brokerOrderNo},
+            #{accountNo}, #{stockCode}, #{executedQuantity},
+            #{averageBuyPrice}, #{executedPrice},
+            #{buyAmount}, #{sellAmount}, #{realizedProfitLoss}, #{returnRate},
+            #{realizedAt}, NOW()
+        )
+    </insert>
+
+    <select id="findByOrderExecutionId"
+            resultType="com.bowon.cpm.feedback.domain.PortfolioRealizedProfitLoss">
+        SELECT id, order_execution_id, order_request_id, broker_order_no,
+               account_no, stock_code, executed_quantity,
+               average_buy_price, executed_price,
+               buy_amount, sell_amount, realized_profit_loss, return_rate,
+               realized_at, created_at
+        FROM portfolio_realized_profit_loss
+        WHERE order_execution_id = #{orderExecutionId}
+        LIMIT 1
+    </select>
+
+    <select id="findRecentPaperByAccountNo"
+            resultType="com.bowon.cpm.feedback.domain.PortfolioRealizedProfitLoss">
+        SELECT id, order_execution_id, order_request_id, broker_order_no,
+               account_no, stock_code, executed_quantity,
+               average_buy_price, executed_price,
+               buy_amount, sell_amount, realized_profit_loss, return_rate,
+               realized_at, created_at
+        FROM portfolio_realized_profit_loss
+        WHERE account_no = #{accountNo}
+          AND broker_order_no LIKE 'PAPER-%'
+        ORDER BY realized_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="aggregatePaperByAccountNo" resultType="map">
+        SELECT
+            COUNT(*) AS sell_count,
+            COALESCE(SUM(realized_profit_loss), 0) AS total_realized_profit_loss,
+            AVG(return_rate) AS average_return_rate,
+            COALESCE(SUM(sell_amount), 0) AS total_sell_amount
+        FROM portfolio_realized_profit_loss
+        WHERE account_no = #{accountNo}
+          AND broker_order_no LIKE 'PAPER-%'
+    </select>
+
+</mapper>

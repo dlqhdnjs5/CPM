@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.paper.mapper.PaperAccountBalanceMapper">
+
+    <insert id="insert" parameterType="com.bowon.cpm.paper.domain.PaperAccountBalance"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO paper_account_balance (
+            account_no,
+            base_datetime,
+            cash_balance,
+            available_cash,
+            total_asset_amount,
+            total_evaluation_amount,
+            total_profit_loss_amount,
+            total_profit_loss_rate
+        ) VALUES (
+            #{accountNo},
+            #{baseDatetime},
+            #{cashBalance},
+            #{availableCash},
+            #{totalAssetAmount},
+            #{totalEvaluationAmount},
+            #{totalProfitLossAmount},
+            #{totalProfitLossRate}
+        )
+    </insert>
+
+    <select id="findLatestByAccountNo" parameterType="string"
+            resultType="com.bowon.cpm.paper.domain.PaperAccountBalance">
+        SELECT id, account_no, base_datetime,
+               cash_balance, available_cash, total_asset_amount,
+               total_evaluation_amount, total_profit_loss_amount,
+               total_profit_loss_rate, created_at
+        FROM paper_account_balance
+        WHERE account_no = #{accountNo}
+        ORDER BY base_datetime DESC, id DESC
+        LIMIT 2
+    </select>
+
+</mapper>

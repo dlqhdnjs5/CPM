@@ -1,81 +1,66 @@
 package com.bowon.cpm.dart.client;
 
-import com.bowon.cpm.dart.client.dto.DartDisclosureResponse;
 import com.bowon.cpm.common.exception.ExternalApiException;
+import com.bowon.cpm.dart.client.dto.DartDisclosureResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
 
-/**
- * DART 공시 목록 조회 클라이언트
- *
- * API: GET /api/list.json
- *
- * Query Parameter 설명:
- * - crtfc_key  : DART API 인증키
- * - corp_code  : DART 기업 고유번호 (8자리)
- * - bgn_de     : 시작일 (yyyyMMdd)
- * - end_de     : 종료일 (yyyyMMdd)
- * - last_reprt_at : 최종보고서 여부 ("Y"=최종, "N"=전체)
- *
- * 응답 status:
- * - "000" = 정상
- * - "010" = 등록되지 않은 키
- * - "020" = 요청 제한 초과
- * - "100" = 조회 결과 없음 (오류 아님)
- */
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class DartDisclosureClient {
 
-    private final WebClient dartWebClient;
+    private final DartProperties dartProperties;
+    private final ObjectMapper objectMapper;
 
-    @Value("${external.dart.api-key}")
-    private String apiKey;
+    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .version(HttpClient.Version.HTTP_1_1)
+            .build();
 
-    /**
-     * 기업 공시 목록 조회
-     *
-     * @param corpCode  DART 기업 고유번호
-     * @param beginDate 시작일 (yyyyMMdd)
-     * @param endDate   종료일 (yyyyMMdd)
-     */
     public DartDisclosureResponse getDisclosureList(
             String corpCode, String beginDate, String endDate) {
 
-        log.debug("[DART] 공시 목록 조회: corpCode={}, {} ~ {}", corpCode, beginDate, endDate);
+        log.debug("[DART] disclosure list: corpCode={}, {} ~ {}", corpCode, beginDate, endDate);
 
         try {
-            DartDisclosureResponse response = dartWebClient.get()
-                    .uri(uriBuilder -> uriBuilder
-                            .path("/api/list.json")
-                            .queryParam("crtfc_key", apiKey)      // DART 인증키
-                            .queryParam("corp_code", corpCode)    // 기업 고유번호
-                            .queryParam("bgn_de", beginDate)      // 시작일
-                            .queryParam("end_de", endDate)        // 종료일
-                            .queryParam("last_reprt_at", "N")     // 전체 보고서
-                            .queryParam("page_count", "100")      // 최대 100건
-                            .build())
-                    .retrieve()
-                    .bodyToMono(DartDisclosureResponse.class)
-                    .block();
+            HttpRequest request = HttpRequest.newBuilder(disclosureListUri(corpCode, beginDate, endDate))
+                    .timeout(Duration.ofSeconds(30))
+                    .GET()
+                    .build();
+            HttpResponse<String> httpResponse = HTTP_CLIENT.send(
+                    request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
-            if (response == null) {
-                throw new ExternalApiException("DART", "공시 목록 응답 없음: corpCode=" + corpCode);
+            if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
+                throw new ExternalApiException("DART",
+                        "Disclosure list HTTP failed: status=" + httpResponse.statusCode());
             }
 
-            // "100" = 조회 결과 없음 (오류 아님, 빈 리스트 처리)
+            DartDisclosureResponse response = objectMapper.readValue(
+                    httpResponse.body(), DartDisclosureResponse.class);
+            if (response == null) {
+                throw new ExternalApiException("DART", "Disclosure list response empty: corpCode=" + corpCode);
+            }
+
             if ("100".equals(response.status())) {
-                log.debug("[DART] 공시 없음: corpCode={}", corpCode);
+                log.debug("[DART] no disclosures: corpCode={}", corpCode);
                 return response;
             }
 
             if (!response.isSuccess()) {
                 throw new ExternalApiException("DART",
-                        "공시 목록 조회 실패: corpCode=" + corpCode + ", status=" + response.status()
+                        "Disclosure list failed: corpCode=" + corpCode
+                                + ", status=" + response.status()
                                 + ", msg=" + response.message());
             }
 
@@ -84,8 +69,27 @@ public class DartDisclosureClient {
         } catch (ExternalApiException e) {
             throw e;
         } catch (Exception e) {
-            throw new ExternalApiException("DART", "공시 목록 조회 중 오류: " + e.getMessage());
+            throw new ExternalApiException("DART", "Disclosure list request failed: " + e.getMessage());
         }
     }
-}
 
+    private URI disclosureListUri(String corpCode, String beginDate, String endDate) {
+        String baseUrl = normalizedBaseUrl();
+        return URI.create(baseUrl + "/api/list.json"
+                + "?crtfc_key=" + encode(dartProperties.apiKey())
+                + "&corp_code=" + encode(corpCode)
+                + "&bgn_de=" + encode(beginDate)
+                + "&end_de=" + encode(endDate)
+                + "&last_reprt_at=N"
+                + "&page_count=100");
+    }
+
+    private String normalizedBaseUrl() {
+        String baseUrl = dartProperties.baseUrl();
+        return baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+    }
+
+    private String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+}

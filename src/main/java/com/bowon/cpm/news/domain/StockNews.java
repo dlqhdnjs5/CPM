@@ -2,7 +2,10 @@ package com.bowon.cpm.news.domain;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -12,6 +15,8 @@ import java.time.LocalDateTime;
  */
 @Getter
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class StockNews {
     private Long id;
     private String stockCode;
@@ -25,5 +30,10 @@ public class StockNews {
     private String publisher;
     private LocalDateTime publishedAt;
     private LocalDateTime collectedAt;
+
+    private String aiSummary;
+    private String sentiment;
+    private BigDecimal sentimentScore;
+    private BigDecimal impactScore;
 }
 

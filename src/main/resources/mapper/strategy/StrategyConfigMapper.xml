@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.strategy.mapper.StrategyConfigMapper">
+
+    <select id="findAll" resultType="com.bowon.cpm.strategy.domain.StrategyConfig">
+        SELECT id, strategy_code, strategy_name, strategy_type,
+               config_json, is_active, created_at, updated_at
+        FROM strategy_config
+        ORDER BY strategy_code
+    </select>
+
+    <select id="findByStrategyCode" parameterType="string"
+            resultType="com.bowon.cpm.strategy.domain.StrategyConfig">
+        SELECT id, strategy_code, strategy_name, strategy_type,
+               config_json, is_active, created_at, updated_at
+        FROM strategy_config
+        WHERE strategy_code = #{strategyCode}
+        LIMIT 1
+    </select>
+
+    <update id="updateSelective" parameterType="com.bowon.cpm.strategy.domain.StrategyConfig">
+        UPDATE strategy_config
+        <set>
+            <if test="strategyName != null">strategy_name = #{strategyName},</if>
+            <if test="strategyType != null">strategy_type = #{strategyType},</if>
+            <if test="configJson != null">config_json = #{configJson},</if>
+            <if test="isActive != null">is_active = #{isActive},</if>
+            updated_at = NOW()
+        </set>
+        WHERE strategy_code = #{strategyCode}
+    </update>
+
+</mapper>

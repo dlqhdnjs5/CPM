@@ -4,6 +4,24 @@
 
 <mapper namespace="com.bowon.cpm.news.mapper.StockNewsMapper">
 
+    <resultMap id="StockNewsResultMap" type="com.bowon.cpm.news.domain.StockNews">
+        <id property="id" column="id"/>
+        <result property="stockCode" column="stock_code"/>
+        <result property="keyword" column="keyword"/>
+        <result property="title" column="title"/>
+        <result property="summary" column="summary"/>
+        <result property="originUrl" column="origin_url"/>
+        <result property="originUrlHash" column="origin_url_hash"/>
+        <result property="naverLink" column="naver_link"/>
+        <result property="publisher" column="publisher"/>
+        <result property="publishedAt" column="published_at"/>
+        <result property="collectedAt" column="collected_at"/>
+        <result property="aiSummary" column="ai_summary"/>
+        <result property="sentiment" column="sentiment"/>
+        <result property="sentimentScore" column="sentiment_score"/>
+        <result property="impactScore" column="impact_score"/>
+    </resultMap>
+
     <!-- INSERT IGNORE — UK: origin_url_hash (SHA-256) -->
     <insert id="insertIgnore" parameterType="com.bowon.cpm.news.domain.StockNews">
         INSERT IGNORE INTO stock_news (
@@ -18,30 +36,51 @@
     </insert>
 
     <!-- 인덱스: idx_stock_news_stock_published (stock_code, published_at) -->
-    <select id="findByStockCode"
-            resultType="com.bowon.cpm.news.domain.StockNews">
+    <select id="findByStockCode" resultMap="StockNewsResultMap">
         SELECT
-            id, stock_code, keyword, title, summary,
-            origin_url, origin_url_hash,
-            naver_link, publisher, published_at, collected_at
-        FROM stock_news
-        WHERE stock_code = #{stockCode}
-        ORDER BY published_at DESC, collected_at DESC
+            sn.id, sn.stock_code, sn.keyword, sn.title,
+            COALESCE(nas.summary, sn.summary) AS summary,
+            nas.summary AS ai_summary,
+            ns.sentiment, ns.sentiment_score, ns.impact_score,
+            sn.origin_url, sn.origin_url_hash,
+            sn.naver_link, sn.publisher, sn.published_at, sn.collected_at
+        FROM stock_news sn
+        LEFT JOIN news_ai_summary nas ON nas.news_id = sn.id
+        LEFT JOIN news_sentiment ns ON ns.news_id = sn.id
+        WHERE sn.stock_code = #{stockCode}
+        ORDER BY sn.published_at DESC, sn.collected_at DESC
         LIMIT #{limit}
     </select>
 
     <!-- 종목 + 발행일(since 이후) 필터 - AI 판단 프롬프트용 (인덱스: stock_code, published_at) -->
-    <select id="findByStockCodeAndPublishedAfter"
-            resultType="com.bowon.cpm.news.domain.StockNews">
+    <select id="findByStockCodeAndPublishedAfter" resultMap="StockNewsResultMap">
         SELECT
-            id, stock_code, keyword, title, summary,
-            origin_url, origin_url_hash,
-            naver_link, publisher, published_at, collected_at
-        FROM stock_news
-        WHERE stock_code = #{stockCode}
-          AND published_at IS NOT NULL
-          AND published_at >= #{since}
-        ORDER BY published_at DESC, collected_at DESC
+            sn.id, sn.stock_code, sn.keyword, sn.title,
+            COALESCE(nas.summary, sn.summary) AS summary,
+            nas.summary AS ai_summary,
+            ns.sentiment, ns.sentiment_score, ns.impact_score,
+            sn.origin_url, sn.origin_url_hash,
+            sn.naver_link, sn.publisher, sn.published_at, sn.collected_at
+        FROM stock_news sn
+        LEFT JOIN news_ai_summary nas ON nas.news_id = sn.id
+        LEFT JOIN news_sentiment ns ON ns.news_id = sn.id
+        WHERE sn.stock_code = #{stockCode}
+          AND sn.published_at IS NOT NULL
+          AND sn.published_at >= #{since}
+        ORDER BY sn.published_at DESC, sn.collected_at DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="findPendingAnalysisTargets" resultMap="StockNewsResultMap">
+        SELECT
+            sn.id, sn.stock_code, sn.keyword, sn.title, sn.summary,
+            sn.origin_url, sn.origin_url_hash,
+            sn.naver_link, sn.publisher, sn.published_at, sn.collected_at
+        FROM stock_news sn
+        LEFT JOIN news_ai_summary nas ON nas.news_id = sn.id
+        LEFT JOIN news_sentiment ns ON ns.news_id = sn.id
+        WHERE nas.id IS NULL OR ns.id IS NULL
+        ORDER BY sn.published_at DESC, sn.collected_at DESC
         LIMIT #{limit}
     </select>
 

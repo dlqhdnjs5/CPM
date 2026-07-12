@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.bowon.cpm.market.mapper.MarketIndexMapper">
+
+    <select id="findLatestChangeRateByCodes" resultType="java.math.BigDecimal">
+        SELECT change_rate
+        FROM market_index
+        WHERE index_code IN
+        <foreach collection="indexCodes" item="code" open="(" separator="," close=")">
+            #{code}
+        </foreach>
+          AND change_rate IS NOT NULL
+        ORDER BY trade_date DESC, id DESC
+        LIMIT 1
+    </select>
+
+    <select id="calculateMarketTypeChangeRate" resultType="java.math.BigDecimal">
+        WITH ranked AS (
+            SELECT
+                sp.stock_code,
+                sp.trade_date,
+                sp.close_price,
+                ROW_NUMBER() OVER (
+                    PARTITION BY sp.stock_code
+                    ORDER BY sp.trade_date DESC
+                ) AS rn
+            FROM stock_price_daily sp
+            INNER JOIN stock_master sm ON sm.stock_code = sp.stock_code
+            WHERE sm.market_type = #{marketType}
+              AND sm.is_active = 1
+              AND sp.close_price IS NOT NULL
+        ),
+        paired AS (
+            SELECT
+                latest.stock_code,
+                latest.close_price AS latest_close,
+                previous.close_price AS previous_close
+            FROM ranked latest
+            INNER JOIN ranked previous
+              ON previous.stock_code = latest.stock_code
+             AND previous.rn = 2
+            WHERE latest.rn = 1
+              AND previous.close_price > 0
+        )
+        SELECT AVG((latest_close - previous_close) / previous_close * 100)
+        FROM paired
+    </select>
+
+    <select id="calculateSectorChangeRate" resultType="java.math.BigDecimal">
+        WITH ranked AS (
+            SELECT
+                sp.stock_code,
+                sp.trade_date,
+                sp.close_price,
+                ROW_NUMBER() OVER (
+                    PARTITION BY sp.stock_code
+                    ORDER BY sp.trade_date DESC
+                ) AS rn
+            FROM stock_price_daily sp
+            INNER JOIN stock_master sm ON sm.stock_code = sp.stock_code
+            WHERE sm.sector_name = #{sectorName}
+              AND sm.is_active = 1
+              AND sp.close_price IS NOT NULL
+        ),
+        paired AS (
+            SELECT
+                latest.stock_code,
+                latest.close_price AS latest_close,
+                previous.close_price AS previous_close
+            FROM ranked latest
+            INNER JOIN ranked previous
+              ON previous.stock_code = latest.stock_code
+             AND previous.rn = 2
+            WHERE latest.rn = 1
+              AND previous.close_price > 0
+        )
+        SELECT AVG((latest_close - previous_close) / previous_close * 100)
+        FROM paired
+    </select>
+
+</mapper>

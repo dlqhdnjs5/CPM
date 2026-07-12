@@ -10,6 +10,7 @@ import java.time.LocalDateTime;
 @Builder
 public class StockQuoteResult {
     private String stockCode;
+    private String stockName;
     private BigDecimal currentPrice;
     private BigDecimal changePrice;
     private BigDecimal changeRate;
