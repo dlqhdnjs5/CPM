@@ -160,6 +160,15 @@ AI의 BUY 판단은 주문 조건이 아니라 주문 후보입니다. 실제 �
 - Gradle
 - Vanilla HTML/CSS/JavaScript Dashboard
 
+## 결과 화면
+### 대시보드
+<img width="1877" height="835" alt="image" src="https://github.com/user-attachments/assets/3664257c-d464-4ee4-8504-e93055569740" />
+<img width="1871" height="776" alt="image" src="https://github.com/user-attachments/assets/96d6ca24-c6a7-40c5-ba39-5e49ec89ee4e" />
+<img width="1866" height="845" alt="image" src="https://github.com/user-attachments/assets/f3f2e977-67d5-4ed5-9f04-dd3dbb1ced6f" />
+<img width="1862" height="827" alt="image" src="https://github.com/user-attachments/assets/187160e2-0852-4472-b873-0132c9ac0cd7" />
+<img width="1887" height="827" alt="image" src="https://github.com/user-attachments/assets/80dc235b-ed4a-430c-8e2b-591cdd17096b" />
+
+
 ## 구현하면서 중요하게 본 점
 
 - 자동매매보다 먼저 관측 가능성을 만들었습니다. AI 프롬프트, 원문 응답, 파싱 결과, 리스크 결과, 주문 상태, 외부 API 호출 로그를 DB에 남겼습니다.
