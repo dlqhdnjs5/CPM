@@ -58,15 +58,13 @@ public class DartMajorEventService {
 
         if (disclosures.isEmpty()) {
             log.debug("[DartMajorEvent] disclosure not found: stockCode={}", stockCode);
-            return 0;
+            return null;
         }
 
         int savedCount = 0;
         for (DartDisclosure disclosure : disclosures) {
             String reportName = disclosure.getReportName();
-            if (reportName == null) {
-                continue;
-            }
+    
 
             String[] typeAndScore = detectEventType(reportName);
             if (typeAndScore == null) {
@@ -95,11 +93,11 @@ public class DartMajorEventService {
                 if (summary != null) {
                     majorEventMapper.updateSummary(event.getId(), summary);
                 }
-                savedCount++;
+                savedCount = savedCount + 1;
             }
         }
 
-        log.info("[DartMajorEvent] major events saved: stockCode={}, count={}", stockCode, savedCount);
+        log.info("[DartMajorEvent] asdfasdsvxvcxv  test major events saved: stockCode={}, count={}", stockCode, savedCount);
         return savedCount;
     }
 
