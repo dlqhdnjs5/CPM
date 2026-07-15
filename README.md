@@ -139,16 +139,9 @@ AI의 BUY 판단은 주문 조건이 아니라 주문 후보입니다. 실제 �
 - 최소 주문 수량이 가능한가
 - 같은 판단으로 중복 주문이 생성되지 않는가
 
-이 결과는 `risk_check_result`에 저장되며, 실패한 판단은 주문으로 이어지지 않습니다.
-
 ## PAPER와 REAL 모드
 
 실제 계좌와 가상 계좌는 테이블부터 분리했습니다.
-
-| 구분 | 계좌 | 포지션 | 손익 |
-| --- | --- | --- | --- |
-| PAPER | `paper_account_balance` | `paper_portfolio_position` | `paper_portfolio_profit_loss` |
-| REAL | `account_balance` | `portfolio_position` | `portfolio_profit_loss` |
 
 이렇게 분리한 이유는 실험 중인 AI 전략이 실제 계좌 상태를 오염시키지 않도록 하기 위해서입니다. 같은 주문 흐름을 사용하되, 실행 대상과 저장 위치를 모드별로 분리했습니다.
 
