@@ -1,12 +1,20 @@
 <img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/db7ce54c-4668-4ac5-86d6-480f01b3f672" />
 
 
+기간: 2026.06.10 ~ 진행중
+
+프로젝트 인원: 이보원
 
 # CPM: AI 기반 주식 판단/자동매매 백엔드
+
+
 
 CPM(Copy Paste Money)은 주식 데이터를 수집하고, AI가 매매 판단을 생성한 뒤, 룰 기반 리스크 검증과 주문 정책을 통과한 경우에만 PAPER 또는 REAL 모드로 주문 흐름을 진행하는 백엔드 프로젝트입니다.
 
 이 프로젝트의 핵심은 "AI가 매수하라고 했으니 바로 주문한다"가 아닙니다. AI는 판단을 만들고, 시스템은 그 판단을 검증하고, 모든 과정은 DB에 기록됩니다. 즉, AI를 자동매매 시스템 안에서 통제 가능한 의사결정 모듈로 다루는 것이 목표입니다.
+
+
+
 
 ## 왜 만들었나
 
@@ -160,6 +168,7 @@ AI의 BUY 판단은 주문 조건이 아니라 주문 후보입니다. 실제 �
 ## 결과 화면
 ### 대시보드
 <img width="1877" height="835" alt="image" src="https://github.com/user-attachments/assets/3664257c-d464-4ee4-8504-e93055569740" />
+(수익을 보기 위해 계속 수정과 전략을 바꿔가는중 입니다..)
 <img width="1871" height="776" alt="image" src="https://github.com/user-attachments/assets/96d6ca24-c6a7-40c5-ba39-5e49ec89ee4e" />
 <img width="1866" height="845" alt="image" src="https://github.com/user-attachments/assets/f3f2e977-67d5-4ed5-9f04-dd3dbb1ced6f" />
 <img width="1862" height="827" alt="image" src="https://github.com/user-attachments/assets/187160e2-0852-4472-b873-0132c9ac0cd7" />
